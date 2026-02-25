@@ -6,7 +6,15 @@ let db: Database.Database | null = null;
 
 function getDb(): Database.Database {
   if (!db) {
-    db = new Database(DB_PATH);
+    try {
+      db = new Database(DB_PATH);
+      // Ensure we are in write mode if possible
+      db.pragma("journal_mode = WAL");
+    } catch (err: any) {
+      console.error("[DB Init Error]", err);
+      throw err;
+    }
+
     db.exec(`
       CREATE TABLE IF NOT EXISTS scans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,7 +28,8 @@ function getDb(): Database.Database {
         password_hash TEXT NOT NULL,
         name TEXT NOT NULL,
         plan TEXT NOT NULL DEFAULT 'free',
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        role TEXT DEFAULT 'user'
       );
       CREATE TABLE IF NOT EXISTS batches (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +52,29 @@ function getDb(): Database.Database {
         count INTEGER DEFAULT 0,
         last_reset TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
+
+    // Primitive Migration: Add 'role' column to 'users' if it doesn't exist
+    try {
+      db.prepare("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'").run();
+    } catch (e) {
+      // Column probably exists
+    }
+
+    // Initialize default settings
+    try {
+      const currentSettings = db.prepare("SELECT COUNT(*) as count FROM settings").get() as { count: number };
+      if (currentSettings.count === 0) {
+        db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("guest_mode", "true");
+        db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("public_signup", "true");
+      }
+    } catch (err) {
+      console.error("[DB Settings Init Error]", err);
+    }
   }
   return db;
 }
@@ -62,6 +93,7 @@ export interface User {
   password_hash: string;
   name: string;
   plan: string;
+  role: string;
   created_at: string;
 }
 
@@ -206,4 +238,83 @@ export function incrementIpUsage(ip: string, amount: number): void {
     SET count = count + ?, last_reset = ? 
     WHERE ip = ?
   `).run(amount, today, ip);
+}
+
+// ─── Settings Helpers ────────────────────────────────────────────────────────
+export function getSetting(key: string, defaultValue: string): string {
+  const database = getDb();
+  const row = database.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+  return row?.value ?? defaultValue;
+}
+
+export function updateSetting(key: string, value: string): void {
+  const database = getDb();
+  database.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run(key, value);
+}
+
+// ─── Admin Helpers ────────────────────────────────────────────────────────────
+export function getGlobalStats() {
+  const database = getDb();
+  const batchUrls = (database.prepare("SELECT COALESCE(SUM(total_urls), 0) as total FROM batches").get() as { total: number }).total;
+  const scanUrls = (database.prepare("SELECT COUNT(*) as total FROM scans").get() as { total: number }).total;
+  const totalUrls = batchUrls + scanUrls;
+
+  const totalUsers = (database.prepare("SELECT COUNT(*) as total FROM users").get() as { total: number }).total;
+  const guestUsers24h = (database.prepare("SELECT COUNT(DISTINCT ip) as total FROM rate_limits WHERE last_reset = ?").get(new Date().toDateString()) as { total: number }).total;
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const newUsers7d = (database.prepare("SELECT COUNT(*) as total FROM users WHERE created_at >= ?").get(sevenDaysAgo.toISOString()) as { total: number }).total;
+
+  return { totalUrls, totalUsers, guestUsers24h, newUsers7d };
+}
+
+export function getAdminRecentChecks(limit: number = 20) {
+  const database = getDb();
+  // Combine batches (registered users) and scans (guests)
+  return database.prepare(`
+    SELECT 
+      'batch' as type,
+      b.id,
+      u.email,
+      u.plan,
+      b.total_urls,
+      b.indexed_count,
+      b.created_at
+    FROM batches b
+    JOIN users u ON b.user_id = u.id
+    UNION ALL
+    SELECT 
+      'scan' as type,
+      s.id,
+      'Guest User' as email,
+      'guest' as plan,
+      1 as total_urls,
+      CASE WHEN s.status = 'INDEXED' THEN 1 ELSE 0 END as indexed_count,
+      s.checked_at as created_at
+    FROM scans s
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(limit) as any[];
+}
+
+export function getAllUsers() {
+  const database = getDb();
+  return database.prepare(`
+    SELECT 
+      id, email, name, role, plan, created_at,
+      (SELECT COALESCE(SUM(total_urls), 0) FROM batches WHERE user_id = users.id) as total_checks
+    FROM users
+    ORDER BY id DESC
+  `).all() as any[];
+}
+
+export function updatePremiumStatus(email: string, isPremium: boolean): void {
+  const database = getDb();
+  database.prepare("UPDATE users SET plan = ? WHERE email = ?").run(isPremium ? 'premium' : 'free', email);
+}
+
+export function setUserRole(email: string, role: string): void {
+  const database = getDb();
+  database.prepare("UPDATE users SET role = ? WHERE email = ?").run(role, email);
 }

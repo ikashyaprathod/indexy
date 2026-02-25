@@ -12,6 +12,7 @@ export interface JWTPayload {
     userId: number;
     email: string;
     name: string;
+    role: string;
 }
 
 // ─── Sign a new JWT ───────────────────────────────────────────────────────────
@@ -28,7 +29,8 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
     try {
         const { payload } = await jwtVerify(token, SECRET);
         return payload as unknown as JWTPayload;
-    } catch {
+    } catch (err: any) {
+        console.error("[Auth] Token verification failed:", err.message);
         return null;
     }
 }

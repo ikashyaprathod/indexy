@@ -31,30 +31,30 @@ export default function Home() {
           <CheckerCard />
 
           {/* Trust Badges */}
-          <div className="flex flex-wrap items-center justify-center gap-8 mt-12 mb-8">
-            <div className="flex items-center gap-2 text-[#475569]">
-              <div className="w-8 h-8 rounded-lg bg-[#141925] flex items-center justify-center border border-white/[0.05]">
-                <CheckCircle size={14} className="text-[#3b82f6]" />
+          <div className="flex flex-wrap items-center justify-center gap-6 mt-12 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#141925] flex items-center justify-center border border-white/[0.05]">
+                <ShieldCheck size={16} className="text-[#6366f1]" fill="currentColor" opacity={0.4} />
               </div>
-              <span className="text-[12px] font-bold tracking-wide">100% Accurate Data</span>
+              <span className="text-[11px] font-bold tracking-tight text-[#334155]">100% Accurate Data</span>
             </div>
 
             <div className="w-[1px] h-4 bg-white/5 hidden md:block" />
 
-            <div className="flex items-center gap-2 text-[#475569]">
-              <div className="w-8 h-8 rounded-lg bg-[#141925] flex items-center justify-center border border-white/[0.05]">
-                <Activity size={14} className="text-[#10b981]" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#141925] flex items-center justify-center border border-white/[0.05]">
+                <Activity size={16} className="text-[#10b981]" />
               </div>
-              <span className="text-[12px] font-bold tracking-wide">0.4s Latency</span>
+              <span className="text-[11px] font-bold tracking-tight text-[#334155]">0.4s Latency</span>
             </div>
 
             <div className="w-[1px] h-4 bg-white/5 hidden md:block" />
 
-            <div className="flex items-center gap-2 text-[#475569]">
-              <div className="w-8 h-8 rounded-lg bg-[#141925] flex items-center justify-center border border-white/[0.05]">
-                <ShieldCheck size={14} className="text-[#6366f1]" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#141925] flex items-center justify-center border border-white/[0.05]">
+                <CheckCircle size={16} className="text-[#334155]" />
               </div>
-              <span className="text-[12px] font-bold tracking-wide">SSL Secured</span>
+              <span className="text-[11px] font-bold tracking-tight text-[#334155]">SSL Secured</span>
             </div>
           </div>
         </main>

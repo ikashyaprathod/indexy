@@ -18,11 +18,56 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
+
+    // Load initial preference and remembered email
+    useEffect(() => {
+        const savedPreference = localStorage.getItem("indexy_remember_me_pref");
+        if (savedPreference !== null) {
+            setRememberMe(savedPreference === "true");
+        }
+
+        const savedEmail = localStorage.getItem("indexy_remembered_email");
+        if (savedEmail) {
+            setEmail(savedEmail);
+        }
+    }, []);
+
+    // Save checkbox preference
+    const handleRememberMeChange = (checked: boolean) => {
+        setRememberMe(checked);
+        localStorage.setItem("indexy_remember_me_pref", String(checked));
+        if (!checked) {
+            localStorage.removeItem("indexy_remembered_email");
+        }
+    };
 
     useEffect(() => {
         setError(null);
-        setName(""); setEmail(""); setPassword("");
-    }, [tab]);
+        setName("");
+
+        // Preserve remembered email if switching back to login
+        if (tab === "login") {
+            const savedEmail = localStorage.getItem("indexy_remembered_email");
+            if (savedEmail && rememberMe) {
+                setEmail(savedEmail);
+            } else {
+                setEmail("");
+            }
+        } else {
+            setEmail("");
+        }
+
+        setPassword("");
+    }, [tab, rememberMe]);
+
+    // Load remembered email
+    useEffect(() => {
+        const savedEmail = localStorage.getItem("indexy_remembered_email");
+        if (savedEmail) {
+            setEmail(savedEmail);
+        }
+    }, []);
 
     // Close on Escape
     useEffect(() => {
@@ -50,6 +95,13 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
             if (!res.ok) {
                 setError(data.error ?? "Something went wrong.");
                 return;
+            }
+
+            // Persistence logic
+            if (tab === "login" && rememberMe) {
+                localStorage.setItem("indexy_remembered_email", email);
+            } else if (tab === "login" && !rememberMe) {
+                localStorage.removeItem("indexy_remembered_email");
             }
 
             router.push("/dashboard");
@@ -121,12 +173,20 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form
+                    onSubmit={handleSubmit}
+                    className="space-y-4"
+                    method="POST"
+                    action={tab === "login" ? "/api/auth/login" : "/api/auth/register"}
+                >
                     {tab === "signup" && (
                         <div className="relative">
                             <User size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#828a9f]" />
                             <input
                                 type="text"
+                                id="signup_name"
+                                name="name"
+                                autoComplete="name"
                                 placeholder="Full name"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
@@ -141,6 +201,9 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
                         <Mail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#828a9f]" />
                         <input
                             type="email"
+                            id={tab === "login" ? "login_email" : "signup_email"}
+                            name="email"
+                            autoComplete="email"
                             placeholder="Email address"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
@@ -154,6 +217,9 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
                         <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#828a9f]" />
                         <input
                             type={showPassword ? "text" : "password"}
+                            id={tab === "login" ? "login_password" : "signup_password"}
+                            name="password"
+                            autoComplete={tab === "login" ? "current-password" : "new-password"}
                             placeholder="Password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
@@ -170,6 +236,21 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
                             {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                         </button>
                     </div>
+
+                    {tab === "login" && (
+                        <div className="flex items-center gap-2 px-1">
+                            <input
+                                type="checkbox"
+                                id="rememberMe"
+                                checked={rememberMe}
+                                onChange={(e) => handleRememberMeChange(e.target.checked)}
+                                className="w-4 h-4 rounded border-white/10 bg-white/5 text-[#5b7aff] focus:ring-0 cursor-pointer"
+                            />
+                            <label htmlFor="rememberMe" className="text-xs text-[#828a9f] cursor-pointer select-none">
+                                Remember me
+                            </label>
+                        </div>
+                    )}
 
                     {error && (
                         <div className="rounded-lg px-4 py-3 text-sm text-red-400"

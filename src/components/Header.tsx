@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Zap, LayoutDashboard, LogOut } from "lucide-react";
+import { Zap, LayoutDashboard, LogOut, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthModal from "./AuthModal";
@@ -11,6 +11,7 @@ interface UserInfo {
     name: string;
     email: string;
     plan: string;
+    role: string;
 }
 
 export default function Header() {

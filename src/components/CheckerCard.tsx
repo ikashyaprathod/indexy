@@ -12,6 +12,7 @@ import {
     Lock,
     ExternalLink,
     Loader2,
+    Diamond,
 } from "lucide-react";
 import { getApiToken } from "@/app/actions/security";
 
@@ -198,21 +199,25 @@ export default function CheckerCard() {
         >
             {/* Tab bar - small pill toggles inside */}
             <div className="flex justify-center pt-8 pb-4">
-                <div className="flex bg-[#0D101D] rounded-lg p-1 border border-white/[0.03]">
+                <div className="flex bg-[#0D101D] rounded-xl p-1.5 border border-white/[0.03]">
                     <button
                         onClick={() => setActiveTab("single")}
-                        className={`py-2 px-6 text-[13px] font-semibold flex items-center gap-2 rounded-md transition-all ${activeTab === "single" ? "bg-[#1A1E2E] text-white shadow-sm border border-white/[0.05]" : "text-[#64748b] hover:text-white"
+                        className={`py-2.5 px-6 text-[13px] font-bold flex items-center gap-2 rounded-lg transition-all ${activeTab === "single"
+                            ? "bg-[#1A1E2E] text-white shadow-[0_2px_10px_rgba(0,0,0,0.3)] border border-white/[0.05]"
+                            : "text-[#475569] hover:text-[#94a3b8]"
                             }`}
                     >
-                        <Link2 size={14} className={activeTab === "single" ? "text-white" : "text-[#64748b]"} />
+                        <Link2 size={16} className={activeTab === "single" ? "text-white" : "text-[#475569]"} />
                         Single URL
                     </button>
                     <button
                         onClick={() => setActiveTab("bulk")}
-                        className={`py-2 px-6 text-[13px] font-semibold flex items-center gap-2 rounded-md transition-all ${activeTab === "bulk" ? "bg-[#1A1E2E] text-white shadow-sm border border-white/[0.05]" : "text-[#64748b] hover:text-white"
+                        className={`py-2.5 px-6 text-[13px] font-bold flex items-center gap-2 rounded-lg transition-all ${activeTab === "bulk"
+                            ? "bg-[#1A1E2E] text-white shadow-[0_2px_10px_rgba(0,0,0,0.3)] border border-white/[0.05]"
+                            : "text-[#475569] hover:text-[#94a3b8]"
                             }`}
                     >
-                        <Layers size={14} className={activeTab === "bulk" ? "text-white" : "text-[#64748b]"} />
+                        <Diamond size={16} className={activeTab === "bulk" ? "text-white" : "text-[#475569]"} />
                         Bulk Mode
                     </button>
                 </div>
@@ -220,8 +225,8 @@ export default function CheckerCard() {
 
             {/* Input area */}
             <div className="px-6 space-y-4">
-                <div className="p-5 flex items-start gap-4 rounded-xl bg-[#0D101D] border border-white/[0.03]">
-                    <Globe size={18} className="mt-1 shrink-0 text-[#475569]" />
+                <div className="p-6 flex items-start gap-4 rounded-xl bg-[#0D101D] border border-white/[0.03] inner-shadow">
+                    <Globe size={20} className="mt-1 shrink-0 text-[#1e293b]" />
                     <textarea
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
@@ -231,64 +236,67 @@ export default function CheckerCard() {
                                 : "https://example.com/page-to-check\nhttps://example.com/another-page"
                         }
                         rows={activeTab === "bulk" ? 5 : 3}
-                        className="flex-1 bg-transparent resize-none outline-none text-[13px] w-full font-mono font-medium placeholder-[#334155]"
-                        style={{ color: "#94a3b8", lineHeight: 1.6 }}
+                        className="flex-1 bg-transparent resize-none outline-none text-[14px] w-full font-mono font-medium placeholder-[#1e293b]"
+                        style={{ color: "#334155", lineHeight: 1.6 }}
                     />
                 </div>
 
-                {/* Guest info bar */}
-                <div className="px-4 py-4 rounded-xl bg-[#0D101D] border border-white/[0.03]">
-                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#475569" }}>
-                        <span>
-                            Guest Mode: <span className="text-[#94a3b8]">10 URLs per check</span>
-                        </span>
-                        <span>
-                            <span className={remaining < 5 ? "text-red-400" : "text-[#94a3b8]"}>
-                                20
-                            </span> per day remaining
-                        </span>
+                {/* Action Row: Guest Info + Button */}
+                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-6 p-5 rounded-2xl bg-[#080A12] border border-white/[0.03]">
+                    {/* Left: Guest Info */}
+                    <div className="flex-1 space-y-4">
+                        <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider px-1" style={{ color: "#334155" }}>
+                            <div className="flex items-center gap-1.5">
+                                Guest Mode: <span className="text-[#94a3b8]">10 URLs per check</span>
+                            </div>
+                            <div>
+                                <span className={remaining < 5 ? "text-red-400" : "text-[#94a3b8]"}>
+                                    20
+                                </span> per day remaining
+                            </div>
+                        </div>
+                        {/* Progress Bar */}
+                        <div className="w-full h-1.5 bg-[#141925] rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-[#3b82f6] rounded-full shadow-[0_0_12px_rgba(59,130,246,0.8)]"
+                                style={{ width: "65%" }}
+                            />
+                        </div>
                     </div>
-                    {/* Progress Bar */}
-                    <div className="w-full h-1.5 bg-[#141925] rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-[#3b82f6] rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]"
-                            style={{ width: "65%" }}
-                        />
-                    </div>
+
+                    {/* Right: CTA Button */}
+                    <button
+                        onClick={handleCheck}
+                        disabled={isChecking || limitReached}
+                        className="px-8 py-4.5 rounded-xl font-bold text-[15px] text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:brightness-110 shadow-[0_10px_30px_rgba(99,102,241,0.2)]"
+                        style={{ background: "#6366f1" }}
+                    >
+                        {isChecking ? (
+                            <>
+                                <Loader2 size={18} className="animate-spin" />
+                                {progress
+                                    ? `Checking… (${progress.done} / ${progress.total})`
+                                    : "Checking…"}
+                            </>
+                        ) : (
+                            <>
+                                <Zap size={18} fill="currentColor" />
+                                Check Index Status
+                            </>
+                        )}
+                    </button>
                 </div>
 
-                {/* Error */}
+                {/* Error Section */}
                 {error && (
                     <div
-                        className="flex items-center gap-2 rounded-lg p-3 text-sm"
-                        style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171" }}
+                        className="flex items-center gap-2 rounded-xl p-4 text-sm animate-fade-in-up"
+                        style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171" }}
                     >
-                        <AlertCircle size={14} />
-                        {error}
+                        <AlertCircle size={16} />
+                        <span className="font-medium tracking-wide">{error}</span>
                     </div>
                 )}
-
-                {/* CTA Button */}
-                <button
-                    onClick={handleCheck}
-                    disabled={isChecking || limitReached}
-                    className="w-full py-4.5 rounded-xl font-bold text-[15px] text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:brightness-110 shadow-[0_4px_20px_rgba(124,58,237,0.3)]"
-                    style={{ background: "#7c3aed" }}
-                >
-                    {isChecking ? (
-                        <>
-                            <Loader2 size={18} className="animate-spin" />
-                            {progress
-                                ? `Checking… (${progress.done} / ${progress.total})`
-                                : "Checking…"}
-                        </>
-                    ) : (
-                        <>
-                            <Zap size={18} fill="white" />
-                            Check Index Status
-                        </>
-                    )}
-                </button>
 
                 <p className="text-center font-bold text-[9px] tracking-[0.1em] text-[#4b5563] uppercase pt-1">
                     POWERED BY REAL-TIME GOOGLE SEARCH VERIFICATION.
@@ -296,21 +304,21 @@ export default function CheckerCard() {
 
                 {/* Limit reached banner (Hidden for logged in users) */}
                 {!user && (
-                    <div className="bg-[#121421] border border-white/[0.04] rounded-xl p-5 flex items-center justify-between mt-6 shadow-inner">
+                    <div className="bg-[#121421] border border-white/[0.04] rounded-xl p-6 flex items-center justify-between mt-6">
                         <div className="flex items-center gap-4">
-                            <div className="w-[42px] h-[42px] rounded-xl bg-[#1A1E2E] flex items-center justify-center border border-white/[0.05]">
-                                <Lock size={16} className="text-[#6366f1]" fill="currentColor" />
+                            <div className="w-[48px] h-[48px] rounded-xl bg-[#1A1E2E] flex items-center justify-center border border-white/[0.05]">
+                                <Lock size={18} className="text-[#6366f1]" fill="currentColor" opacity={0.6} />
                             </div>
                             <div className="flex flex-col gap-0.5">
-                                <p className="text-[14px] font-bold text-[#f1f5f9]">
+                                <p className="text-[15px] font-bold text-white">
                                     You've reached today's limit.
                                 </p>
-                                <p className="text-[12px] text-[#475569] font-medium">
-                                    Create Free Account &ndash; Unlimited Checks
+                                <p className="text-[13px] text-[#475569] font-medium">
+                                    Create Free Account – Unlimited Checks
                                 </p>
                             </div>
                         </div>
-                        <button className="bg-[#1e2336] hover:bg-[#282f4a] transition-colors text-[12px] font-bold text-white px-5 py-2.5 rounded-lg border border-white/[0.08] shadow-sm">
+                        <button className="bg-[#1e2336] hover:bg-[#282f4a] transition-colors text-[13px] font-bold text-white px-6 py-3 rounded-lg border border-white/[0.08] shadow-sm">
                             Create Account
                         </button>
                     </div>
@@ -322,11 +330,11 @@ export default function CheckerCard() {
 
             {/* Results table */}
             <div className="px-6 pt-10 pb-4">
-                <div className="flex items-center justify-between mb-4 px-2">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#334155]">
+                <div className="flex items-center justify-between mb-5 px-1">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#1e293b]">
                         LAST CHECK
                     </span>
-                    <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#334155]">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#1e293b]">
                         STATUS
                     </span>
                 </div>
@@ -348,37 +356,37 @@ export default function CheckerCard() {
                         }
                     `}} />
 
-                <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
                     {/* Mockup Rows for parity */}
                     {!isChecking && results.length === 0 && (
                         <>
-                            <div className="p-4 rounded-xl bg-[#0D101D] border border-white/[0.03] flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-[#141925] flex items-center justify-center border border-white/[0.05]">
-                                        <Globe size={14} className="text-[#334155]" />
-                                    </div>
-                                    <span className="text-[13px] font-mono font-medium text-[#94a3b8]">https://indexy.app/features</span>
-                                </div>
+                            <div className="p-5 rounded-xl bg-[#0D101D] border border-white/[0.03] flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-4">
-                                    <div className="flex items-center gap-2 bg-[#064e3b]/20 border border-[#10b981]/20 px-3 py-1.5 rounded-lg">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-[#10b981] shadow-[0_0_6px_#10b981]" />
-                                        <span className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider">INDEXED</span>
+                                    <div className="w-10 h-10 rounded-xl bg-[#141925] flex items-center justify-center border border-white/[0.05]">
+                                        <Globe size={16} className="text-[#1e293b]" />
                                     </div>
-                                    <ExternalLink size={14} className="text-[#334155]" />
+                                    <span className="text-[14px] font-mono font-medium text-[#334155]">https://indexy.app/features</span>
+                                </div>
+                                <div className="flex items-center gap-5">
+                                    <div className="flex items-center gap-2 bg-[#064e3b]/10 border border-[#10b981]/10 px-4 py-2 rounded-lg">
+                                        <div className="w-2 h-2 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]" />
+                                        <span className="text-[11px] font-bold text-[#10b981] uppercase tracking-wider">INDEXED</span>
+                                    </div>
+                                    <ExternalLink size={16} className="text-[#1e293b]" />
                                 </div>
                             </div>
-                            <div className="p-4 rounded-xl bg-[#0D101D] border border-white/[0.03] flex items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-[#141925] flex items-center justify-center border border-white/[0.05]">
-                                        <Globe size={14} className="text-[#334155]" />
-                                    </div>
-                                    <span className="text-[13px] font-mono font-medium text-[#94a3b8]">https://indexy.app/pricing</span>
-                                </div>
+                            <div className="p-5 rounded-xl bg-[#0D101D] border border-white/[0.03] flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-4">
-                                    <div className="flex items-center gap-2 bg-[#450a0a]/20 border border-[#ef4444]/20 px-3 py-1.5 rounded-lg">
-                                        <span className="text-[10px] font-bold text-[#ef4444] uppercase tracking-wider">NOT INDEXED</span>
+                                    <div className="w-10 h-10 rounded-xl bg-[#141925] flex items-center justify-center border border-white/[0.05]">
+                                        <Globe size={16} className="text-[#1e293b]" />
                                     </div>
-                                    <ExternalLink size={14} className="text-[#334155]" />
+                                    <span className="text-[14px] font-mono font-medium text-[#334155]">https://indexy.app/pricing</span>
+                                </div>
+                                <div className="flex items-center gap-5">
+                                    <div className="flex items-center gap-2 bg-[#450a0a]/10 border border-[#ef4444]/10 px-4 py-2 rounded-lg">
+                                        <span className="text-[11px] font-bold text-[#ef4444] uppercase tracking-wider">NOT INDEXED</span>
+                                    </div>
+                                    <ExternalLink size={16} className="text-[#1e293b]" />
                                 </div>
                             </div>
                         </>
@@ -387,33 +395,33 @@ export default function CheckerCard() {
                     {results.slice(0, 50).map((result, i) => (
                         <div
                             key={i}
-                            className="p-4 rounded-xl bg-[#0D101D] border border-white/[0.03] flex items-center justify-between gap-4 animate-fade-in-up"
+                            className="p-5 rounded-xl bg-[#0D101D] border border-white/[0.03] flex items-center justify-between gap-4 animate-fade-in-up"
                             style={{ animationDelay: `${i * 40}ms` }}
                         >
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-8 h-8 rounded-lg bg-[#141925] flex items-center justify-center shrink-0 border border-white/[0.05]">
-                                    <Globe size={14} className="text-[#334155]" />
+                            <div className="flex items-center gap-4 min-w-0">
+                                <div className="w-10 h-10 rounded-xl bg-[#141925] flex items-center justify-center shrink-0 border border-white/[0.05]">
+                                    <Globe size={16} className="text-[#1e293b]" />
                                 </div>
                                 <span
-                                    className="text-[13px] truncate font-mono font-medium text-[#94a3b8]"
-                                    style={{ maxWidth: 300 }}
+                                    className="text-[14px] truncate font-mono font-medium text-[#334155]"
+                                    style={{ maxWidth: 400 }}
                                     title={result.url}
                                 >
                                     {truncateUrl(result.url, 45)}
                                 </span>
                             </div>
-                            <div className="flex items-center gap-4 shrink-0">
+                            <div className="flex items-center gap-5 shrink-0">
                                 {result.status === "INDEXED" ? (
-                                    <div className="flex items-center gap-2 bg-[#064e3b]/20 border border-[#10b981]/20 px-3 py-1.5 rounded-lg">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-[#10b981] shadow-[0_0_6px_#10b981]" />
-                                        <span className="text-[10px] font-bold text-[#10b981] uppercase tracking-wider">INDEXED</span>
+                                    <div className="flex items-center gap-2 bg-[#064e3b]/10 border border-[#10b981]/10 px-4 py-2 rounded-lg">
+                                        <div className="w-2 h-2 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]" />
+                                        <span className="text-[11px] font-bold text-[#10b981] uppercase tracking-wider">INDEXED</span>
                                     </div>
                                 ) : result.status === "NOT_INDEXED" ? (
-                                    <div className="flex items-center gap-2 bg-[#450a0a]/20 border border-[#ef4444]/20 px-3 py-1.5 rounded-lg">
-                                        <span className="text-[10px] font-bold text-[#ef4444] uppercase tracking-wider">NOT INDEXED</span>
+                                    <div className="flex items-center gap-2 bg-[#450a0a]/10 border border-[#ef4444]/10 px-4 py-2 rounded-lg">
+                                        <span className="text-[11px] font-bold text-[#ef4444] uppercase tracking-wider">NOT INDEXED</span>
                                     </div>
                                 ) : (
-                                    <div className="bg-[#141925] text-[#475569] border border-white/5 text-[10px] uppercase font-bold px-3 py-1.5 rounded-lg tracking-wider">
+                                    <div className="bg-[#141925] text-[#475569] border border-white/5 text-[11px] uppercase font-bold px-4 py-2 rounded-lg tracking-wider">
                                         ERROR
                                     </div>
                                 )}
@@ -422,7 +430,7 @@ export default function CheckerCard() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
-                                    <ExternalLink size={14} className="text-[#334155] hover:text-white transition-colors cursor-pointer" />
+                                    <ExternalLink size={16} className="text-[#1e293b] hover:text-white transition-colors cursor-pointer" />
                                 </a>
                             </div>
                         </div>
