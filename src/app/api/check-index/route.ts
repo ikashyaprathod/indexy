@@ -234,14 +234,19 @@ export async function POST(request: NextRequest) {
                             try {
                                 if (status !== "ERROR") {
                                     saveScan(url, status);
-                                    // Also save to the user's batch if logged in
-                                    if (batch) {
-                                        saveBatchResult(batch.id, url, status);
-                                    }
                                 }
                             } catch {
                                 // DB write failure — non-fatal
                             }
+                        }
+
+                        // ALWAYS save to the user's batch if logged in and not an error
+                        try {
+                            if (batch && status !== "ERROR") {
+                                saveBatchResult(batch.id, url, status);
+                            }
+                        } catch (err) {
+                            console.error("[Batch Save Error]", err);
                         }
 
                         const checked_at = new Date().toISOString();
