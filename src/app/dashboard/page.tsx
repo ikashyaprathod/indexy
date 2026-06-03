@@ -69,6 +69,8 @@ export default function DashboardPage() {
     const [batchFilter, setBatchFilter] = useState<"ALL" | "HIGH" | "MEDIUM" | "LOW">("ALL");
     const [showFilterMenu, setShowFilterMenu] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [modalFilter, setModalFilter] = useState<"ALL" | "INDEXED" | "NOT_INDEXED">("ALL");
+    const [modalCopied, setModalCopied] = useState(false);
 
     // Close filter dropdown on outside click
     useEffect(() => {
@@ -80,6 +82,15 @@ export default function DashboardPage() {
         document.addEventListener("mousedown", handler);
         return () => document.removeEventListener("mousedown", handler);
     }, [showFilterMenu]);
+
+    // Escape closes batch details modal; reset its filter on open
+    useEffect(() => {
+        if (!selectedBatch) return;
+        setModalFilter("ALL");
+        const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setSelectedBatch(null); };
+        window.addEventListener("keydown", handler);
+        return () => window.removeEventListener("keydown", handler);
+    }, [selectedBatch]);
 
     // Initial persistence load
     useEffect(() => {
@@ -849,57 +860,126 @@ export default function DashboardPage() {
                     onClick={(e) => e.target === e.currentTarget && setSelectedBatch(null)}>
                     <div className="w-full max-w-4xl max-h-[85vh] rounded-2xl overflow-hidden flex flex-col"
                         style={{ background: "#0e1120", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)" }}>
-                        <div className="flex items-center justify-between px-6 py-5 border-b" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
-                            <div>
-                                <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                                    Batch #{selectedBatch.id}
-                                    <span className="text-xs font-normal text-[#4b5563]">Results History</span>
-                                </h3>
-                                <p className="text-sm text-[#828a9f] mt-1">
-                                    Showing all {selectedBatch.results.length} URLs processed in this batch.
-                                </p>
+                        {/* Modal header */}
+                        <div className="px-6 py-5 border-b" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                            <div className="flex items-start justify-between gap-4">
+                                <div>
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                                        Batch #{selectedBatch.id}
+                                        <span className="text-xs font-normal text-[#4b5563]">Results History</span>
+                                    </h3>
+                                    <p className="text-sm text-[#828a9f] mt-1">
+                                        {(() => {
+                                            const mf = modalFilter === "ALL" ? selectedBatch.results : selectedBatch.results.filter(r => r.status === modalFilter);
+                                            return `Showing ${mf.length} of ${selectedBatch.results.length} URLs`;
+                                        })()}
+                                    </p>
+                                </div>
+                                <button onClick={() => setSelectedBatch(null)} className="p-2 rounded-lg text-[#828a9f] hover:text-white hover:bg-white/5 transition-all flex-shrink-0">
+                                    <X size={20} />
+                                </button>
                             </div>
-                            <button onClick={() => setSelectedBatch(null)} className="p-2 rounded-lg text-[#828a9f] hover:text-white hover:bg-white/5 transition-all">
-                                <X size={20} />
-                            </button>
+
+                            {/* Filter pills + copy */}
+                            <div className="flex items-center gap-2 mt-4">
+                                {([
+                                    { key: "ALL", label: "All", count: selectedBatch.results.length },
+                                    { key: "INDEXED", label: "Indexed", count: selectedBatch.results.filter(r => r.status === "INDEXED").length },
+                                    { key: "NOT_INDEXED", label: "Not Indexed", count: selectedBatch.results.filter(r => r.status === "NOT_INDEXED").length },
+                                ] as const).map(({ key, label, count }) => (
+                                    <button
+                                        key={key}
+                                        onClick={() => setModalFilter(key)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                                        style={modalFilter === key ? {
+                                            background: key === "INDEXED" ? "rgba(16,185,129,0.12)" : key === "NOT_INDEXED" ? "rgba(239,68,68,0.12)" : "rgba(91,122,255,0.12)",
+                                            border: `1px solid ${key === "INDEXED" ? "rgba(16,185,129,0.3)" : key === "NOT_INDEXED" ? "rgba(239,68,68,0.3)" : "rgba(91,122,255,0.3)"}`,
+                                            color: key === "INDEXED" ? "#10b981" : key === "NOT_INDEXED" ? "#ef4444" : "#5b7aff",
+                                        } : {
+                                            background: "rgba(255,255,255,0.03)",
+                                            border: "1px solid rgba(255,255,255,0.06)",
+                                            color: "#4b5563",
+                                        }}
+                                    >
+                                        {label}
+                                        <span className="px-1 py-0.5 rounded text-[9px] font-black" style={{ background: "rgba(255,255,255,0.06)" }}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                ))}
+
+                                <div className="w-px h-4 mx-1" style={{ background: "rgba(255,255,255,0.06)" }} />
+
+                                {/* Copy filtered URLs */}
+                                <button
+                                    onClick={() => {
+                                        const rows = modalFilter === "ALL" ? selectedBatch.results : selectedBatch.results.filter(r => r.status === modalFilter);
+                                        navigator.clipboard.writeText(rows.map(r => r.url).join("\n")).then(() => {
+                                            setModalCopied(true);
+                                            setTimeout(() => setModalCopied(false), 1800);
+                                        });
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                                    style={modalCopied ? {
+                                        background: "rgba(16,185,129,0.12)",
+                                        border: "1px solid rgba(16,185,129,0.3)",
+                                        color: "#10b981",
+                                    } : {
+                                        background: "rgba(255,255,255,0.03)",
+                                        border: "1px solid rgba(255,255,255,0.06)",
+                                        color: "#4b5563",
+                                    }}
+                                    title="Copy filtered URLs"
+                                >
+                                    {modalCopied ? <Check size={11} /> : <Clipboard size={11} />}
+                                    Copy Links
+                                </button>
+                            </div>
                         </div>
 
+                        {/* Results list */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-2">
-                            {/* Column headers */}
                             <div className="grid grid-cols-[1fr_120px_140px] gap-2 px-2 pb-2 border-b text-[10px] uppercase tracking-widest font-semibold text-[#4b5563]"
                                 style={{ borderColor: "rgba(255,255,255,0.05)" }}>
                                 <span>URL</span><span>Status</span><span className="text-right">Action</span>
                             </div>
-                            {selectedBatch.results.map((r, i) => (
-                                <div key={i} className="grid grid-cols-[1fr_120px_140px] gap-2 items-center px-2 py-3 rounded-lg hover:bg-white/[0.02] transition-colors border-b border-white/[0.02]">
-                                    <span className="text-xs font-mono text-[#d1d5db] truncate" title={r.url}>{r.url}</span>
-                                    <div>
-                                        {r.status === "INDEXED" ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
-                                                style={{ background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", color: "#10b981" }}>
-                                                <CheckCircle2 size={9} /> INDEXED
-                                            </span>
-                                        ) : r.status === "NOT_INDEXED" ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
-                                                style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444" }}>
-                                                <X size={9} /> NOT INDEXED
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
-                                                style={{ background: "rgba(107,114,128,0.15)", border: "1px solid rgba(107,114,128,0.3)", color: "#9ca3af" }}>
-                                                <AlertCircle size={9} /> ERROR
-                                            </span>
-                                        )}
+                            {(() => {
+                                const rows = modalFilter === "ALL" ? selectedBatch.results : selectedBatch.results.filter(r => r.status === modalFilter);
+                                return rows.length === 0 ? (
+                                    <div className="text-center py-16 text-xs text-[#4b5563] font-black uppercase tracking-widest">
+                                        No {modalFilter.toLowerCase().replace("_", " ")} results
                                     </div>
-                                    <div className="flex justify-end">
-                                        <a href={`https://www.google.com/search?q=${encodeURIComponent(`site:${toSiteQuery(r.url)}`)}`}
-                                            target="_blank" rel="noopener noreferrer"
-                                            className="p-1 px-2 rounded-md bg-white/5 text-[10px] font-semibold text-[#828a9f] hover:text-white hover:bg-white/10 transition-all flex items-center gap-1.5">
-                                            Verify <ExternalLink size={10} />
-                                        </a>
+                                ) : rows.map((r, i) => (
+                                    <div key={i} className="grid grid-cols-[1fr_120px_140px] gap-2 items-center px-2 py-3 rounded-lg hover:bg-white/[0.02] transition-colors border-b border-white/[0.02]">
+                                        <span className="text-xs font-mono text-[#d1d5db] truncate" title={r.url}>{r.url}</span>
+                                        <div>
+                                            {r.status === "INDEXED" ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
+                                                    style={{ background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", color: "#10b981" }}>
+                                                    <CheckCircle2 size={9} /> INDEXED
+                                                </span>
+                                            ) : r.status === "NOT_INDEXED" ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
+                                                    style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444" }}>
+                                                    <X size={9} /> NOT INDEXED
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
+                                                    style={{ background: "rgba(107,114,128,0.15)", border: "1px solid rgba(107,114,128,0.3)", color: "#9ca3af" }}>
+                                                    <AlertCircle size={9} /> ERROR
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex justify-end">
+                                            <a href={`https://www.google.com/search?q=${encodeURIComponent(`site:${toSiteQuery(r.url)}`)}`}
+                                                target="_blank" rel="noopener noreferrer"
+                                                className="p-1 px-2 rounded-md bg-white/5 text-[10px] font-semibold text-[#828a9f] hover:text-white hover:bg-white/10 transition-all flex items-center gap-1.5">
+                                                Verify <ExternalLink size={10} />
+                                            </a>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                ));
+                            })()}
                         </div>
 
                         <div className="px-6 py-4 border-t flex justify-end" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
