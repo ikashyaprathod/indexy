@@ -560,8 +560,7 @@ export default function DashboardPage() {
                                                     }}
                                                     title={`Copy ${filtered.length} URL${filtered.length !== 1 ? "s" : ""}`}
                                                 >
-                                                    {copied ? <Check size={11} /> : <Clipboard size={11} />}
-                                                    {copied ? "Copied!" : "Copy URLs"}
+                                                    {copied ? <Check size={13} /> : <Clipboard size={13} />}
                                                 </button>
                                             );
                                         })()}
