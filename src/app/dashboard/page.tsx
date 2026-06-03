@@ -66,6 +66,20 @@ export default function DashboardPage() {
     const [copied, setCopied] = useState(false);
     const liveUpdateRef = useRef(true);
     const pendingResultsRef = useRef<ScanResult[]>([]);
+    const [batchFilter, setBatchFilter] = useState<"ALL" | "HIGH" | "MEDIUM" | "LOW">("ALL");
+    const [showFilterMenu, setShowFilterMenu] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    // Close filter dropdown on outside click
+    useEffect(() => {
+        if (!showFilterMenu) return;
+        const handler = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest("[data-filter-menu]")) setShowFilterMenu(false);
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [showFilterMenu]);
 
     // Initial persistence load
     useEffect(() => {
@@ -219,6 +233,36 @@ export default function DashboardPage() {
             setCopied(true);
             setTimeout(() => setCopied(false), 1800);
         });
+    }
+
+    function downloadBatchesCSV(rows: Batch[]) {
+        const header = ["Batch ID", "Date", "Total URLs", "Indexed", "Not Indexed", "Index Rate %"];
+        const csvRows = rows.map(b => {
+            const rate = b.total_urls > 0 ? Math.round((b.indexed_count / b.total_urls) * 100) : 0;
+            return [
+                `#${b.id}`,
+                new Date(b.created_at).toLocaleString(),
+                b.total_urls,
+                b.indexed_count,
+                b.total_urls - b.indexed_count,
+                rate,
+            ].join(",");
+        });
+        const csv = [header.join(","), ...csvRows].join("\n");
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `indexy-history-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    async function handleRefreshBatches() {
+        setRefreshing(true);
+        await new Promise(r => setTimeout(r, 400));
+        refreshBatches();
+        setRefreshing(false);
     }
 
     const indexedCount = results.filter(r => r.status === "INDEXED").length;
@@ -628,30 +672,107 @@ export default function DashboardPage() {
                     )}
 
                     {/* ── Check History ──────────────────────────────────────────── */}
-                    <div className="rounded-[24px]" style={{ background: "linear-gradient(145deg, #0e1120, #080a15)", border: "1px solid rgba(255,255,255,0.04)" }}>
+                    <div className="rounded-[24px] relative" style={{ background: "linear-gradient(145deg, #0e1120, #080a15)", border: "1px solid rgba(255,255,255,0.04)" }}>
                         <div className="flex items-center justify-between px-8 py-6 border-b border-white/[0.03]">
                             <div>
                                 <div className="text-sm font-black text-white uppercase tracking-widest">Check History</div>
                                 <div className="text-[10px] text-[#4b5563] font-black uppercase tracking-[0.2em] mt-1">Your past batch operations</div>
                             </div>
-                            <div className="flex items-center gap-4">
-                                <button className="p-2 rounded-xl text-[#4b5563] hover:text-white hover:bg-white/5 transition-all">
-                                    <Filter size={16} />
+                            <div className="flex items-center gap-3">
+                                {/* Filter button + dropdown */}
+                                <div className="relative" data-filter-menu>
+                                    <button
+                                        onClick={() => setShowFilterMenu(v => !v)}
+                                        className="p-2 rounded-xl transition-all"
+                                        style={showFilterMenu || batchFilter !== "ALL" ? {
+                                            color: "#5b7aff", background: "rgba(91,122,255,0.08)", border: "1px solid rgba(91,122,255,0.2)"
+                                        } : {
+                                            color: "#4b5563", background: "transparent", border: "1px solid transparent"
+                                        }}
+                                        title="Filter batches"
+                                    >
+                                        <Filter size={15} />
+                                    </button>
+                                    {showFilterMenu && (
+                                        <div
+                                            className="absolute right-0 top-10 z-50 rounded-xl overflow-hidden shadow-2xl"
+                                            style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", minWidth: "170px" }}
+                                        >
+                                            {([
+                                                { key: "ALL", label: "All Batches" },
+                                                { key: "HIGH", label: "High ≥ 70%" },
+                                                { key: "MEDIUM", label: "Medium 40–69%" },
+                                                { key: "LOW", label: "Low < 40%" },
+                                            ] as const).map(({ key, label }) => (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => { setBatchFilter(key); setShowFilterMenu(false); }}
+                                                    className="w-full text-left px-4 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all hover:bg-white/5"
+                                                    style={{ color: batchFilter === key ? "#5b7aff" : "#828a9f" }}
+                                                >
+                                                    {batchFilter === key && <span className="mr-1.5">✓</span>}{label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Download CSV */}
+                                <button
+                                    onClick={() => {
+                                        const rows = batchFilter === "ALL" ? batches : batches.filter(b => {
+                                            const rate = b.total_urls > 0 ? Math.round((b.indexed_count / b.total_urls) * 100) : 0;
+                                            return batchFilter === "HIGH" ? rate >= 70 : batchFilter === "MEDIUM" ? rate >= 40 && rate < 70 : rate < 40;
+                                        });
+                                        downloadBatchesCSV(rows);
+                                    }}
+                                    className="p-2 rounded-xl text-[#4b5563] hover:text-white hover:bg-white/5 transition-all"
+                                    title="Download CSV"
+                                >
+                                    <Download size={15} />
                                 </button>
-                                <button className="p-2 rounded-xl text-[#4b5563] hover:text-white hover:bg-white/5 transition-all">
-                                    <Download size={16} />
-                                </button>
-                                <div className="w-px h-6 bg-white/5" />
-                                <button onClick={refreshBatches} className="p-2 rounded-xl text-[#4b5563] hover:text-[#5b7aff] hover:bg-[#5b7aff]/5 transition-all">
-                                    <RefreshCw size={16} />
+
+                                <div className="w-px h-5 bg-white/5" />
+
+                                {/* Refresh */}
+                                <button
+                                    onClick={handleRefreshBatches}
+                                    disabled={refreshing}
+                                    className="p-2 rounded-xl text-[#4b5563] hover:text-[#5b7aff] hover:bg-[#5b7aff]/5 transition-all disabled:opacity-50"
+                                    title="Refresh history"
+                                >
+                                    <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
                                 </button>
                             </div>
                         </div>
 
-                        {batches.length === 0 ? (
+                        {/* Active filter badge */}
+                        {batchFilter !== "ALL" && (
+                            <div className="flex items-center gap-2 px-8 py-2 border-b border-white/[0.02]">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-[#4b5563]">Filtered:</span>
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest"
+                                    style={{ background: "rgba(91,122,255,0.08)", border: "1px solid rgba(91,122,255,0.15)", color: "#5b7aff" }}>
+                                    {batchFilter === "HIGH" ? "High ≥ 70%" : batchFilter === "MEDIUM" ? "Medium 40–69%" : "Low < 40%"}
+                                </span>
+                                <button onClick={() => setBatchFilter("ALL")} className="text-[10px] font-black text-[#4b5563] hover:text-white transition-colors ml-1">
+                                    <X size={11} />
+                                </button>
+                            </div>
+                        )}
+
+                        {(() => {
+                            const filteredBatches = batchFilter === "ALL" ? batches : batches.filter(b => {
+                                const rate = b.total_urls > 0 ? Math.round((b.indexed_count / b.total_urls) * 100) : 0;
+                                return batchFilter === "HIGH" ? rate >= 70 : batchFilter === "MEDIUM" ? rate >= 40 && rate < 70 : rate < 40;
+                            });
+                            return filteredBatches.length === 0 ? (
                             <div className="px-8 py-20 text-center">
-                                <div className="text-xs text-[#4b5563] font-black uppercase tracking-widest">No history yet</div>
-                                <p className="text-[10px] text-[#2d3748] mt-1 uppercase tracking-widest font-black">Run your first check above</p>
+                                <div className="text-xs text-[#4b5563] font-black uppercase tracking-widest">
+                                    {batches.length === 0 ? "No history yet" : "No batches match this filter"}
+                                </div>
+                                <p className="text-[10px] text-[#2d3748] mt-1 uppercase tracking-widest font-black">
+                                    {batches.length === 0 ? "Run your first check above" : "Try a different filter"}
+                                </p>
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
@@ -664,7 +785,7 @@ export default function DashboardPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/[0.03]">
-                                        {batches.map((b, i) => {
+                                        {filteredBatches.map((b, i) => {
                                             const rate = b.total_urls > 0 ? Math.round((b.indexed_count / b.total_urls) * 100) : 0;
                                             return (
                                                 <tr key={b.id} className="hover:bg-white/[0.01] transition-colors group">
@@ -712,7 +833,8 @@ export default function DashboardPage() {
                                     </tbody>
                                 </table>
                             </div>
-                        )}
+                        );
+                        })()}
                     </div>
                 </div>
             </main>
