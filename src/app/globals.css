@@ -156,3 +156,41 @@ body {
 .pulse-dot {
   animation: pulseDot 1.5s ease infinite;
 }
+
+/* Neon button — Sign Up CTA */
+.btn-neon {
+  background: linear-gradient(135deg, #5b7aff, #4558e8);
+  transition: opacity 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.btn-neon:hover {
+  opacity: 0.9;
+  box-shadow: 0 4px 20px rgba(91, 122, 255, 0.4);
+}
+
+.btn-neon:active {
+  transform: scale(0.98);
+}
+
+/* Custom scrollbar for result lists */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Inner shadow for input wells */
+.inner-shadow {
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.35);
+}

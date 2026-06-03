@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { X, Mail, Lock, User, Zap, Eye, EyeOff } from "lucide-react";
 
 interface AuthModalProps {
@@ -10,7 +9,6 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ initialTab = "login", onClose }: AuthModalProps) {
-    const router = useRouter();
     const [tab, setTab] = useState<"login" | "signup">(initialTab);
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
@@ -18,6 +16,7 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [success, setSuccess] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
 
     // Load initial preference and remembered email
@@ -59,15 +58,7 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
         }
 
         setPassword("");
-    }, [tab, rememberMe]);
-
-    // Load remembered email
-    useEffect(() => {
-        const savedEmail = localStorage.getItem("indexy_remembered_email");
-        if (savedEmail) {
-            setEmail(savedEmail);
-        }
-    }, []);
+    }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Close on Escape
     useEffect(() => {
@@ -104,10 +95,12 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
                 localStorage.removeItem("indexy_remembered_email");
             }
 
-            router.push("/dashboard");
+            // Show "Redirecting…" before the full page load starts
+            setSuccess(true);
+            // Full page navigation so the proxy middleware sees the fresh auth cookie.
+            window.location.href = "/dashboard";
         } catch {
             setError("Network error. Please try again.");
-        } finally {
             setLoading(false);
         }
     }
@@ -176,8 +169,6 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
                 <form
                     onSubmit={handleSubmit}
                     className="space-y-4"
-                    method="POST"
-                    action={tab === "login" ? "/api/auth/login" : "/api/auth/register"}
                 >
                     {tab === "signup" && (
                         <div className="relative">
@@ -261,11 +252,13 @@ export default function AuthModal({ initialTab = "login", onClose }: AuthModalPr
 
                     <button
                         type="submit"
-                        disabled={loading}
+                        disabled={loading || success}
                         className="w-full py-3.5 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 transition-all disabled:opacity-60"
                         style={{ background: "linear-gradient(135deg, #5b7aff, #4558e8)" }}
                     >
-                        {loading ? (
+                        {success ? (
+                            <span>Redirecting…</span>
+                        ) : loading ? (
                             <span className="animate-pulse">
                                 {tab === "login" ? "Logging in…" : "Creating account…"}
                             </span>

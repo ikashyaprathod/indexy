@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import {
-    Zap, Link2, TrendingUp, Clock, CheckCircle2, XCircle,
-    AlertCircle, Globe, ExternalLink, RefreshCw, Trash2,
-    LayoutDashboard, LogOut, ChevronRight, Loader2,
-    Filter, Download, Settings, Database, Activity,
-    Calendar, MoreHorizontal
+    Zap, Link2, Clock, CheckCircle2, X,
+    AlertCircle, ExternalLink, RefreshCw,
+    LogOut, Loader2,
+    Filter, Download, Database, Activity,
+    Calendar
 } from "lucide-react";
 import Link from "next/link";
 import Footer from "@/components/Footer";
+import { getApiToken } from "@/app/actions/security";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface User { id: number; name: string; email: string; plan: string; }
@@ -47,7 +47,7 @@ function toSiteQuery(url: string): string {
 }
 
 export default function DashboardPage() {
-    const router = useRouter();
+    const [authChecked, setAuthChecked] = useState(false);
     const [user, setUser] = useState<User | null>(null);
     const [stats, setStats] = useState<Stats | null>(null);
     const [batches, setBatches] = useState<Batch[]>([]);
@@ -59,6 +59,9 @@ export default function DashboardPage() {
     const [selectedBatch, setSelectedBatch] = useState<{ id: number; results: ScanResult[] } | null>(null);
     const [loadingBatch, setLoadingBatch] = useState<number | null>(null);
     const [economyMode, setEconomyMode] = useState(false);
+    const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
+    const [checkError, setCheckError] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState<"ALL" | "INDEXED" | "NOT_INDEXED" | "ERROR">("ALL");
 
     // Initial persistence load
     useEffect(() => {
@@ -73,21 +76,31 @@ export default function DashboardPage() {
         localStorage.setItem("indexy_economy_mode", String(next));
     };
 
-    // ── Load user + initial data ───────────────────────────────────────────────
-    useEffect(() => {
-        fetch("/api/auth/me").then(r => r.json()).then(d => {
-            if (!d.user) { router.push("/"); return; }
-            setUser(d.user);
-        });
-        refreshStats();
-        refreshBatches();
-    }, [router]);
-
     const refreshStats = useCallback(() => {
         fetch("/api/dashboard/stats").then(r => r.json()).then(setStats).catch(() => { });
     }, []);
     const refreshBatches = useCallback(() => {
         fetch("/api/dashboard/batches").then(r => r.json()).then(d => setBatches(d.batches ?? [])).catch(() => { });
+    }, []);
+
+    // ── Auth check first, then load data ──────────────────────────────────────
+    useEffect(() => {
+        fetch("/api/auth/me")
+            .then(r => r.json())
+            .then(d => {
+                if (!d.user) {
+                    // Full redirect so the proxy sees the correct auth state
+                    window.location.href = "/";
+                    return;
+                }
+                setUser(d.user);
+                setAuthChecked(true);
+                // Only fetch data once we know the user is logged in
+                refreshStats();
+                refreshBatches();
+            })
+            .catch(() => { window.location.href = "/"; });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const viewBatchDetails = async (batchId: number) => {
@@ -106,7 +119,7 @@ export default function DashboardPage() {
 
     async function handleLogout() {
         await fetch("/api/auth/logout", { method: "POST" });
-        router.push("/");
+        window.location.href = "/";
     }
 
     // ── Check URLs ─────────────────────────────────────────────────────────────
@@ -116,13 +129,16 @@ export default function DashboardPage() {
         setIsChecking(true);
         setResults([]);
         setProgress(null);
+        setCurrentBatchId(null);
+        setCheckError(null);
         // Build initial queue
         setQueue(urls.map(url => ({ url, status: "queued" as const })));
 
         try {
+            const token = await getApiToken();
             const res = await fetch("/api/check-index", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "X-Indexy-Token": token },
                 body: JSON.stringify({ urls, economyMode }),
             });
             if (!res.ok || !res.body) throw new Error("Stream failed");
@@ -144,6 +160,7 @@ export default function DashboardPage() {
                         const event = JSON.parse(line.slice(6));
                         if (event.type === "meta") {
                             setProgress({ done: 0, total: event.total });
+                            if (event.batchId) setCurrentBatchId(event.batchId);
                         } else if (event.type === "result") {
                             // Update queue: mark first "queued" as checked
                             setQueue(prev => {
@@ -164,6 +181,7 @@ export default function DashboardPage() {
             }
         } catch (err) {
             console.error(err);
+            setCheckError(err instanceof Error ? err.message : "Check failed. Please try again.");
         } finally {
             setIsChecking(false);
             setQueue([]);
@@ -175,6 +193,18 @@ export default function DashboardPage() {
 
     const indexedCount = results.filter(r => r.status === "INDEXED").length;
     const indexRate = results.length ? Math.round((indexedCount / results.length) * 100) : 0;
+
+    // Hold render until auth is confirmed to prevent flash of empty content
+    if (!authChecked) {
+        return (
+            <div className="flex min-h-screen items-center justify-center" style={{ background: "#05070a" }}>
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-10 h-10 rounded-full border-2 border-[#5b7aff] border-t-transparent animate-spin" />
+                    <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#4b5563]">Loading workspace…</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col min-h-screen font-sans" style={{ background: "#05070a", color: "#d1d5db" }}>
@@ -239,30 +269,36 @@ export default function DashboardPage() {
                             <div className="relative z-10">
                                 <div className="text-[10px] uppercase tracking-[0.2em] text-[#4b5563] font-black mb-1.5">Total URLs Checked</div>
                                 <div className="text-4xl font-black text-white tracking-tight">{stats ? stats.totalChecked.toLocaleString() : "—"}</div>
-                                <div className="mt-8 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.03)" }}>
-                                    <div className="h-full rounded-full shadow-[0_0_15px_rgba(91,122,255,0.4)]"
-                                        style={{ background: "linear-gradient(90deg, #5b7aff, #4af0c4)", width: "65%" }} />
-                                </div>
+                                {stats && stats.avgIndexRate > 0 && (
+                                    <div className="mt-8 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.03)" }}>
+                                        <div className="h-full rounded-full shadow-[0_0_15px_rgba(91,122,255,0.4)]"
+                                            style={{ background: "linear-gradient(90deg, #5b7aff, #4af0c4)", width: `${Math.round(stats.avgIndexRate)}%` }} />
+                                    </div>
+                                )}
                             </div>
                             <Link2 size={100} className="absolute -right-6 -bottom-6 text-white/[0.02] -rotate-12" />
                         </div>
 
                         {/* Total Time Saved */}
-                        <div className="relative overflow-hidden rounded-[24px] p-7 transition-all hover:translate-y-[-2px] hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]"
-                            style={{ background: "linear-gradient(145deg, #0e1120, #080a15)", border: "1px solid rgba(255,255,255,0.04)" }}>
-                            <div className="relative z-10">
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <div className="text-[10px] uppercase tracking-[0.2em] text-[#4b5563] font-black">Total Time Saved</div>
-                                    <div className="px-2.5 py-1 rounded-full text-[9px] font-black text-[#10b981] uppercase tracking-wider"
-                                        style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)" }}>
-                                        +2h this week
+                        {(() => {
+                            const totalSecs = stats ? stats.totalChecked * 20 : 0;
+                            const hrs = Math.floor(totalSecs / 3600);
+                            const mins = Math.floor((totalSecs % 3600) / 60);
+                            return (
+                                <div className="relative overflow-hidden rounded-[24px] p-7 transition-all hover:translate-y-[-2px] hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]"
+                                    style={{ background: "linear-gradient(145deg, #0e1120, #080a15)", border: "1px solid rgba(255,255,255,0.04)" }}>
+                                    <div className="relative z-10">
+                                        <div className="text-[10px] uppercase tracking-[0.2em] text-[#4b5563] font-black mb-1.5">Total Time Saved</div>
+                                        <div className="text-4xl font-black text-white tracking-tight">
+                                            {stats ? `${hrs}h` : "—"}
+                                            <span className="text-2xl text-[#4b5563]">{stats ? ` ${mins}m` : ""}</span>
+                                        </div>
+                                        <div className="text-[10px] text-[#4b5563] font-medium mt-2">Estimated at 20s per manual check</div>
                                     </div>
+                                    <Clock size={100} className="absolute -right-6 -bottom-6 text-white/[0.02] -rotate-12" />
                                 </div>
-                                <div className="text-4xl font-black text-white tracking-tight">12h <span className="text-2xl text-[#4b5563]">45m</span></div>
-                                <div className="text-[10px] text-[#4b5563] font-medium mt-2">Based on manual check comparison</div>
-                            </div>
-                            <Clock size={100} className="absolute -right-6 -bottom-6 text-white/[0.02] -rotate-12" />
-                        </div>
+                            );
+                        })()}
 
                         {/* Last Checked */}
                         <div className="relative overflow-hidden rounded-[24px] p-7 transition-all hover:translate-y-[-2px] hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]"
@@ -320,9 +356,23 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="flex items-center justify-between mt-6">
-                            <div className="flex items-center gap-2 text-[10px] font-black text-[#4b5563] uppercase tracking-widest">
-                                <CheckCircle2 size={12} className="text-[#5b7aff]" />
-                                Powered by real-time Google search verification
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2 text-[10px] font-black text-[#4b5563] uppercase tracking-widest">
+                                    <CheckCircle2 size={12} className="text-[#5b7aff]" />
+                                    Powered by real-time Google search verification
+                                </div>
+                                <button
+                                    onClick={toggleEconomy}
+                                    title="Economy mode uses local browser scraping instead of the Serper API"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                                    style={economyMode
+                                        ? { background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", color: "#f59e0b" }
+                                        : { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", color: "#4b5563" }
+                                    }
+                                >
+                                    <Zap size={10} fill={economyMode ? "currentColor" : "none"} />
+                                    Economy
+                                </button>
                             </div>
                             <button
                                 onClick={handleCheck}
@@ -343,6 +393,14 @@ export default function DashboardPage() {
                                 )}
                             </button>
                         </div>
+
+                        {checkError && (
+                            <div className="mt-4 flex items-center gap-2 p-4 rounded-xl text-sm text-red-400"
+                                style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)" }}>
+                                <AlertCircle size={15} className="shrink-0" />
+                                {checkError}
+                            </div>
+                        )}
                     </div>
 
                     {/* ── Queue + Live Results ────────────────────────────────────── */}
@@ -352,7 +410,7 @@ export default function DashboardPage() {
                             <div className="rounded-[24px] p-8" style={{ background: "linear-gradient(165deg, #0e1120, #060812)", border: "1px solid rgba(255,255,255,0.04)" }}>
                                 <div className="flex items-center gap-4 mb-8">
                                     <div className="w-10 h-10 rounded-[12px] bg-[#5b7aff]/10 flex items-center justify-center border border-[#5b7aff]/10">
-                                        <RefreshCw size={18} className="text-[#5b7aff] animate-spin" />
+                                        <RefreshCw size={18} className={`text-[#5b7aff] ${isChecking ? "animate-spin" : ""}`} />
                                     </div>
                                     <span className="text-base font-black text-white uppercase tracking-[0.05em] drop-shadow-sm">Processing Queue</span>
                                 </div>
@@ -395,8 +453,39 @@ export default function DashboardPage() {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="text-[11px] font-black uppercase tracking-[0.2em] mb-10">
-                                    <span className="text-[#4b5563]">Batch</span> <span className="text-[#5b7aff]">#4832</span> <span className="mx-2 text-white/5">—</span> <span className="text-[#10b981]">{indexRate}% Indexed</span>
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="text-[11px] font-black uppercase tracking-[0.2em]">
+                                        <span className="text-[#4b5563]">Batch</span> <span className="text-[#5b7aff]">{currentBatchId ? `#${currentBatchId}` : "#—"}</span> <span className="mx-2 text-white/5">—</span> <span className="text-[#10b981]">{indexRate}% Indexed</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        {([
+                                            { key: "ALL", label: "All", count: results.length },
+                                            { key: "INDEXED", label: "Indexed", count: results.filter(r => r.status === "INDEXED").length },
+                                            { key: "NOT_INDEXED", label: "Not Indexed", count: results.filter(r => r.status === "NOT_INDEXED").length },
+                                            { key: "ERROR", label: "Error", count: results.filter(r => r.status === "ERROR").length },
+                                        ] as const).map(({ key, label, count }) => (
+                                            <button
+                                                key={key}
+                                                onClick={() => setStatusFilter(key)}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                                                style={statusFilter === key ? {
+                                                    background: key === "INDEXED" ? "rgba(16,185,129,0.12)" : key === "NOT_INDEXED" ? "rgba(239,68,68,0.12)" : key === "ERROR" ? "rgba(107,114,128,0.12)" : "rgba(91,122,255,0.12)",
+                                                    border: `1px solid ${key === "INDEXED" ? "rgba(16,185,129,0.3)" : key === "NOT_INDEXED" ? "rgba(239,68,68,0.3)" : key === "ERROR" ? "rgba(107,114,128,0.3)" : "rgba(91,122,255,0.3)"}`,
+                                                    color: key === "INDEXED" ? "#10b981" : key === "NOT_INDEXED" ? "#ef4444" : key === "ERROR" ? "#9ca3af" : "#5b7aff",
+                                                } : {
+                                                    background: "rgba(255,255,255,0.02)",
+                                                    border: "1px solid rgba(255,255,255,0.05)",
+                                                    color: "#4b5563",
+                                                }}
+                                            >
+                                                {label}
+                                                <span className="px-1 py-0.5 rounded text-[9px] font-black"
+                                                    style={{ background: "rgba(255,255,255,0.06)" }}>
+                                                    {count}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
@@ -409,8 +498,13 @@ export default function DashboardPage() {
                                         <div className="text-center py-24 text-xs text-[#4b5563] font-black uppercase tracking-[0.2em] animate-pulse">
                                             Waiting for data feed...
                                         </div>
-                                    ) : (
-                                        results.map((r, i) => (
+                                    ) : (() => {
+                                        const filtered = statusFilter === "ALL" ? results : results.filter(r => r.status === statusFilter);
+                                        return filtered.length === 0 ? (
+                                            <div className="text-center py-16 text-xs text-[#4b5563] font-black uppercase tracking-[0.2em]">
+                                                No {statusFilter.toLowerCase().replace("_", " ")} results
+                                            </div>
+                                        ) : filtered.map((r, i) => (
                                             <div key={i} className="grid grid-cols-[1fr_150px_200px] gap-6 items-center px-4 py-6 border-b border-white/[0.02] last:border-0 hover:bg-white/[0.01] transition-all group">
                                                 <span className="text-sm font-black font-mono text-white/90 truncate tracking-tight" title={r.url}>{r.url}</span>
                                                 <div className="flex justify-center">
@@ -430,18 +524,18 @@ export default function DashboardPage() {
                                                         <span className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-[10px] text-[10px] font-black uppercase tracking-[0.1em]"
                                                             style={{ background: "rgba(107,114,128,0.08)", border: "1px solid rgba(107,114,128,0.2)", color: "#9ca3af" }}>
                                                             <div className="w-2 h-2 rounded-full bg-[#9ca3af]" />
-                                                            ERROR 404
+                                                            ERROR
                                                         </span>
                                                     )}
                                                 </div>
                                                 <div className="text-right">
                                                     <span className="text-[11px] font-black text-[#4b5563] uppercase tracking-tight group-hover:text-white/60 transition-colors">
-                                                        {r.status === "INDEXED" ? "Cached 2h ago" : r.status === "NOT_INDEXED" ? "Discovered currently not indexed" : "Not reachable"}
+                                                        {r.checked_at ? new Date(r.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
                                                     </span>
                                                 </div>
                                             </div>
-                                        ))
-                                    )}
+                                        ));
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -513,17 +607,18 @@ export default function DashboardPage() {
                                                         </div>
                                                     </td>
                                                     <td className="px-8 py-5">
-                                                        <div className="flex items-center gap-5 text-[10px] font-black uppercase tracking-widest text-[#4b5563]">
-                                                            <button
-                                                                onClick={() => viewBatchDetails(b.id)}
-                                                                disabled={loadingBatch === b.id}
-                                                                className="hover:text-white transition-all flex items-center gap-1.5 group-hover:translate-x-0.5 transition-transform"
-                                                            >
-                                                                View
-                                                            </button>
-                                                            <button className="hover:text-white transition-all">Recheck</button>
-                                                            <button className="hover:text-red-400 transition-all">Delete</button>
-                                                        </div>
+                                                        <button
+                                                            onClick={() => viewBatchDetails(b.id)}
+                                                            disabled={loadingBatch === b.id}
+                                                            className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-[#4b5563] hover:text-white transition-all disabled:opacity-50"
+                                                        >
+                                                            {loadingBatch === b.id ? (
+                                                                <Loader2 size={11} className="animate-spin" />
+                                                            ) : (
+                                                                <ExternalLink size={11} />
+                                                            )}
+                                                            View
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             );
@@ -557,7 +652,7 @@ export default function DashboardPage() {
                                 </p>
                             </div>
                             <button onClick={() => setSelectedBatch(null)} className="p-2 rounded-lg text-[#828a9f] hover:text-white hover:bg-white/5 transition-all">
-                                <XCircle size={20} />
+                                <X size={20} />
                             </button>
                         </div>
 
@@ -579,7 +674,7 @@ export default function DashboardPage() {
                                         ) : r.status === "NOT_INDEXED" ? (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"
                                                 style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444" }}>
-                                                <XCircle size={9} /> NOT INDEXED
+                                                <X size={9} /> NOT INDEXED
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold"

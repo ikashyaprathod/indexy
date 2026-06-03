@@ -24,7 +24,7 @@ export async function verifyAdminPasskey(pin: string) {
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
             maxAge: 60 * 60 * 2, // 2 hours
-            path: "/admin",
+            path: "/", // must be "/" — path:"/admin" blocks server actions at /_next/action
         });
 
         return { success: true };

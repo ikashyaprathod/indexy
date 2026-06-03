@@ -3,35 +3,53 @@
 import React, { useState, useEffect } from "react";
 import {
     Link2, Users, UserPlus, Zap, Settings, Bell,
-    Search, ShieldCheck, UserCheck, Ban, Monitor,
-    ChevronRight, ExternalLink, RefreshCw, X, Check,
-    Plus, Trash2, Globe, Clock, BarChart3, Mail, ToggleLeft, ToggleRight
+    Search, ShieldCheck, Monitor,
+    RefreshCw, X,
+    Globe, Clock, UserCheck
 } from "lucide-react";
 import { verifyAdminPasskey, checkAdminAuthorization } from "@/app/actions/adminAuth";
+
+interface AdminUser {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    plan: string;
+}
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState<any>(null);
     const [users, setUsers] = useState<any[]>([]);
     const [recentChecks, setRecentChecks] = useState<any[]>([]);
-    const [config, setConfig] = useState<any>({ guest_mode: true, public_signup: true, live_update: true });
+    const [config, setConfig] = useState<{ guest_mode: boolean; public_signup: boolean; live_update: boolean }>({ guest_mode: true, public_signup: true, live_update: true });
     const [premiumEmail, setPremiumEmail] = useState("");
-    const [loading, setLoading] = useState(true);
-    const [session, setSession] = useState<any>(null);
+    const [dataLoading, setDataLoading] = useState(true);
     const [pin, setPin] = useState("");
+    const [pinSubmitting, setPinSubmitting] = useState(false);
     const [isAuthorized, setIsAuthorized] = useState(false);
     const [pinError, setPinError] = useState(false);
+    const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
 
     useEffect(() => {
-        // First check if already authorized via cookie
+        // Fetch the logged-in admin's info
+        fetch("/api/auth/me")
+            .then(r => r.json())
+            .then(d => { if (d.user) setAdminUser(d.user); })
+            .catch(() => {});
+
+        // Start data fetch immediately (parallel with cookie check — data is ready by the time PIN is entered)
+        fetchAdminData();
+
+        // Check if already passkey-authorized (cookie persists for 2h)
         checkAdminAuthorization().then(authorized => {
             if (authorized) setIsAuthorized(true);
-            fetchAdminData();
         });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Live Update Auto-Refresh
     useEffect(() => {
-        let interval: any;
+        let interval: ReturnType<typeof setInterval> | undefined;
         if (config.live_update) {
             interval = setInterval(() => {
                 fetchAdminData();
@@ -41,32 +59,23 @@ export default function AdminDashboard() {
     }, [config.live_update]);
 
     const fetchAdminData = async () => {
+        setDataLoading(true);
         try {
-            const [statsRes, configRes, usersRes, sessionRes] = await Promise.all([
+            const [statsRes, configRes, usersRes] = await Promise.all([
                 fetch("/api/admin/stats"),
                 fetch("/api/admin/config"),
                 fetch("/api/admin/users"),
-                fetch("/api/debug-session")
             ]);
-
-            console.log("Admin API Fetch Statuses:", {
-                stats: statsRes.status,
-                config: configRes.status,
-                users: usersRes.status,
-                session: sessionRes.status
-            });
-
-            if (sessionRes.ok) {
-                const s = await sessionRes.json();
-                setSession(s.session);
-            }
 
             if (statsRes.ok) {
                 const s = await statsRes.json();
                 setStats(s.stats);
                 setRecentChecks(s.recentChecks);
             }
-            if (configRes.ok) setConfig(await configRes.json());
+            if (configRes.ok) {
+                const apiConfig = await configRes.json();
+                setConfig(prev => ({ ...prev, ...apiConfig }));
+            }
             if (usersRes.ok) {
                 const u = await usersRes.json();
                 setUsers(u.users);
@@ -74,60 +83,61 @@ export default function AdminDashboard() {
         } catch (err) {
             console.error("Failed to fetch admin data", err);
         } finally {
-            setLoading(false);
+            setDataLoading(false);
         }
     };
 
-    const toggleConfig = async (key: string) => {
+    const toggleConfig = async (key: keyof typeof config) => {
         const newConfig = { ...config, [key]: !config[key] };
         setConfig(newConfig);
         await fetch("/api/admin/config", {
             method: "POST",
-            body: JSON.stringify(newConfig)
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newConfig),
         });
     };
 
     const handleAddPremium = async () => {
         if (!premiumEmail) return;
-        setLoading(true);
         await fetch("/api/admin/users", {
             method: "POST",
-            body: JSON.stringify({ email: premiumEmail, plan: "premium" })
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: premiumEmail, plan: "premium" }),
         });
         setPremiumEmail("");
         fetchAdminData();
     };
 
     const handleRemovePremium = async (email: string) => {
-        setLoading(true);
         await fetch("/api/admin/users", {
             method: "POST",
-            body: JSON.stringify({ email, plan: "free" })
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, plan: "free" }),
         });
         fetchAdminData();
     };
 
     const handlePinSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const result = await verifyAdminPasskey(pin);
-        if (result.success) {
-            setIsAuthorized(true);
-            setPinError(false);
-            fetchAdminData();
-        } else {
-            setPinError(true);
-            setPin("");
+        if (!pin.trim()) return;
+        setPinSubmitting(true);
+        setPinError(false);
+        try {
+            const result = await verifyAdminPasskey(pin);
+            if (result.success) {
+                setIsAuthorized(true);
+                // Data is already loading in the background from mount; just refresh
+                fetchAdminData();
+            } else {
+                setPinError(true);
+                setPin("");
+            }
+        } finally {
+            setPinSubmitting(false);
         }
     };
 
-    if (loading && !stats) {
-        return (
-            <div className="min-h-screen bg-[#05070a] flex items-center justify-center">
-                <RefreshCw className="text-[#5b7aff] animate-spin" size={32} />
-            </div>
-        );
-    }
-
+    // Show passkey gate immediately — no spinner before it
     if (!isAuthorized) {
         return (
             <div className="min-h-screen bg-[#05070a] flex items-center justify-center font-['Inter']">
@@ -145,15 +155,36 @@ export default function AdminDashboard() {
                                 value={pin}
                                 onChange={(e) => setPin(e.target.value)}
                                 placeholder="••••••"
-                                className={`w-full bg-white/[0.02] border ${pinError ? 'border-red-500/50' : 'border-white/[0.05]'} rounded-2xl px-6 py-4 text-center text-2xl tracking-[0.5em] text-white focus:outline-none focus:border-[#5b7aff]/40 transition-all`}
+                                disabled={pinSubmitting}
+                                className={`w-full bg-white/[0.02] border ${pinError ? 'border-red-500/50' : 'border-white/[0.05]'} rounded-2xl px-6 py-4 text-center text-2xl tracking-[0.5em] text-white focus:outline-none focus:border-[#5b7aff]/40 transition-all disabled:opacity-50`}
                                 autoFocus
                             />
                             {pinError && <p className="text-xs text-red-400 font-bold uppercase tracking-widest">Invalid Security Passkey</p>}
-                            <button className="w-full bg-[#5b7aff] hover:bg-[#4a69ee] text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(91,122,255,0.3)]">
-                                Authorize Dashboard
+                            <button
+                                type="submit"
+                                disabled={pinSubmitting || !pin.trim()}
+                                className="w-full bg-[#5b7aff] hover:bg-[#4a69ee] disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-black uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(91,122,255,0.3)] flex items-center justify-center gap-2"
+                            >
+                                {pinSubmitting ? (
+                                    <><RefreshCw size={16} className="animate-spin" /> Verifying…</>
+                                ) : (
+                                    "Authorize Dashboard"
+                                )}
                             </button>
                         </form>
                     </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Show data loading spinner only after auth is confirmed
+    if (dataLoading && !stats) {
+        return (
+            <div className="min-h-screen bg-[#05070a] flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <RefreshCw className="text-[#5b7aff] animate-spin" size={32} />
+                    <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#4b5563]">Loading admin data…</span>
                 </div>
             </div>
         );
@@ -186,9 +217,9 @@ export default function AdminDashboard() {
                         <div className="h-8 w-[1px] bg-white/[0.05]" />
                         <div className="flex items-center gap-3">
                             <div className="text-right">
-                                <div className="text-sm font-black text-white">{session?.name || "Admin User"}</div>
+                                <div className="text-sm font-black text-white">{adminUser?.name || "Admin User"}</div>
                                 <div className="text-[10px] font-black uppercase tracking-widest text-[#5b7aff]">
-                                    {session?.role || "Limited Access"} {session?.email && `(${session.email})`}
+                                    {adminUser?.role || "admin"} {adminUser?.email && `(${adminUser.email})`}
                                 </div>
                             </div>
                             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#5b7aff] to-[#3b82f6] border-2 border-[#1e293b]" />
@@ -262,15 +293,22 @@ export default function AdminDashboard() {
                                         </div>
                                         <div className="text-center font-mono text-sm font-black text-white">{log.total_urls}</div>
                                         <div className="flex justify-center">
-                                            <div className="w-24 h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-[#10b981] shadow-[0_0_8px_#10b981]"
-                                                    style={{ width: `${Math.round((log.indexed_count / log.total_urls) * 100)}%` }}
-                                                />
-                                            </div>
-                                            <span className="text-[10px] font-black text-[#10b981] ml-2">
-                                                {Math.round((log.indexed_count / log.total_urls) * 100)}%
-                                            </span>
+                                            {(() => {
+                                                const rate = log.total_urls > 0 ? Math.round((log.indexed_count / log.total_urls) * 100) : 0;
+                                                return (
+                                                    <>
+                                                        <div className="w-24 h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-[#10b981] shadow-[0_0_8px_#10b981]"
+                                                                style={{ width: `${rate}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-[10px] font-black text-[#10b981] ml-2">
+                                                            {rate}%
+                                                        </span>
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                         <div className="text-right text-[11px] font-black text-[#4b5563] uppercase">
                                             {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -293,9 +331,9 @@ export default function AdminDashboard() {
 
                             <div className="space-y-6">
                                 {[
-                                    { id: 'guest_mode', label: 'Guest Mode', sub: 'Allow unregistered checks' },
-                                    { id: 'public_signup', label: 'Public Signup', sub: 'Allow new registrations' },
-                                    { id: 'live_update', label: 'Live Update', sub: 'Auto-refresh every 10s' }
+                                    { id: 'guest_mode' as const, label: 'Guest Mode', sub: 'Allow unregistered checks' },
+                                    { id: 'public_signup' as const, label: 'Public Signup', sub: 'Allow new registrations' },
+                                    { id: 'live_update' as const, label: 'Live Update', sub: 'Auto-refresh every 10s' }
                                 ].map((ctrl, i) => (
                                     <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/[0.03]">
                                         <div>

@@ -5,9 +5,7 @@ import {
     Zap,
     Globe,
     Link2,
-    Layers,
     CheckCircle2,
-    XCircle,
     AlertCircle,
     Lock,
     ExternalLink,
@@ -99,7 +97,7 @@ export default function CheckerCard() {
     }, []);
 
     const handleCheck = useCallback(async () => {
-        if (limitReached) return;
+        if (!user && limitReached) return;
         setError(null);
 
         const urls = inputValue
@@ -113,12 +111,15 @@ export default function CheckerCard() {
         }
 
         const urlsToCheck = urls.slice(0, activeTab === "single" ? 1 : 50);
-        const newUsed = guestChecksUsed + urlsToCheck.length;
 
-        if (newUsed > GUEST_DAILY_LIMIT) {
-            setLimitReached(true);
-            setError(`You've reached today's limit of ${GUEST_DAILY_LIMIT} checks.`);
-            return;
+        // Only enforce guest limit for unauthenticated users
+        if (!user) {
+            const newUsed = guestChecksUsed + urlsToCheck.length;
+            if (newUsed > GUEST_DAILY_LIMIT) {
+                setLimitReached(true);
+                setError(`You've reached today's limit of ${GUEST_DAILY_LIMIT} checks.`);
+                return;
+            }
         }
 
         setIsChecking(true);
@@ -140,8 +141,6 @@ export default function CheckerCard() {
                 throw new Error(errData.error || "Check failed");
             }
 
-            // ── SSE Stream Reader ─────────────────────────────────────────────
-            // Events: { type:"meta", total } | { type:"result", url, status, completed, total } | { type:"done" }
             const reader = res.body?.getReader();
             if (!reader) throw new Error("No stream body returned.");
 
@@ -161,7 +160,6 @@ export default function CheckerCard() {
                     try {
                         const event = JSON.parse(line.slice(6));
                         if (event.type === "meta") {
-                            // Kick off the progress counter with the known total
                             setProgress({ done: 0, total: event.total });
                         } else if (event.type === "result") {
                             setResults((prev) => [event as ScanResult, ...prev].slice(0, 50));
@@ -169,7 +167,6 @@ export default function CheckerCard() {
                         } else if (event.type === "done") {
                             setProgress(null);
                         } else {
-                            // Legacy format (no type field) — still handle it
                             setResults((prev) => [event as ScanResult, ...prev].slice(0, 50));
                         }
                     } catch {
@@ -178,9 +175,13 @@ export default function CheckerCard() {
                 }
             }
 
-            incrementGuestChecks(urlsToCheck.length);
-            setGuestChecksUsed(newUsed);
-            if (newUsed >= GUEST_DAILY_LIMIT) setLimitReached(true);
+            // Track usage only for guests
+            if (!user) {
+                const newUsed = guestChecksUsed + urlsToCheck.length;
+                incrementGuestChecks(urlsToCheck.length);
+                setGuestChecksUsed(newUsed);
+                if (newUsed >= GUEST_DAILY_LIMIT) setLimitReached(true);
+            }
             setProgress(null);
             setInputValue("");
         } catch (err: unknown) {
@@ -188,7 +189,7 @@ export default function CheckerCard() {
         } finally {
             setIsChecking(false);
         }
-    }, [inputValue, activeTab, guestChecksUsed, limitReached]);
+    }, [inputValue, activeTab, guestChecksUsed, limitReached, user]);
 
     const remaining = Math.max(0, GUEST_DAILY_LIMIT - guestChecksUsed);
 
@@ -236,39 +237,47 @@ export default function CheckerCard() {
                                 : "https://example.com/page-to-check\nhttps://example.com/another-page"
                         }
                         rows={activeTab === "bulk" ? 5 : 3}
-                        className="flex-1 bg-transparent resize-none outline-none text-[14px] w-full font-mono font-medium placeholder-[#1e293b]"
-                        style={{ color: "#334155", lineHeight: 1.6 }}
+                        className="flex-1 bg-transparent resize-none outline-none text-[14px] w-full font-mono font-medium placeholder-[#2d3748] text-[#94a3b8]"
+                        style={{ lineHeight: 1.6 }}
                     />
                 </div>
 
-                {/* Action Row: Guest Info + Button */}
+                {/* Action Row: Info + Button */}
                 <div className="flex flex-col md:flex-row items-stretch md:items-center gap-6 p-5 rounded-2xl bg-[#080A12] border border-white/[0.03]">
-                    {/* Left: Guest Info */}
+                    {/* Left: Guest info or logged-in indicator */}
                     <div className="flex-1 space-y-4">
-                        <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider px-1" style={{ color: "#334155" }}>
-                            <div className="flex items-center gap-1.5">
-                                Guest Mode: <span className="text-[#94a3b8]">10 URLs per check</span>
+                        {user ? (
+                            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider px-1 text-[#4b5563]">
+                                <CheckCircle2 size={13} className="text-[#5b7aff]" />
+                                Unlimited checks enabled
                             </div>
-                            <div>
-                                <span className={remaining < 5 ? "text-red-400" : "text-[#94a3b8]"}>
-                                    20
-                                </span> per day remaining
-                            </div>
-                        </div>
-                        {/* Progress Bar */}
-                        <div className="w-full h-1.5 bg-[#141925] rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-[#3b82f6] rounded-full shadow-[0_0_12px_rgba(59,130,246,0.8)]"
-                                style={{ width: "65%" }}
-                            />
-                        </div>
+                        ) : (
+                            <>
+                                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider px-1" style={{ color: "#475569" }}>
+                                    <div className="flex items-center gap-1.5">
+                                        Guest Mode: <span className="text-[#64748b]">{activeTab === "single" ? "1 URL" : "50 URLs"} per check</span>
+                                    </div>
+                                    <div>
+                                        <span className={remaining < 5 ? "text-red-400" : "text-[#64748b]"}>
+                                            {remaining}
+                                        </span> per day remaining
+                                    </div>
+                                </div>
+                                <div className="w-full h-1.5 bg-[#141925] rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-[#3b82f6] rounded-full shadow-[0_0_12px_rgba(59,130,246,0.8)] transition-all duration-500"
+                                        style={{ width: `${Math.min(100, Math.round((guestChecksUsed / GUEST_DAILY_LIMIT) * 100))}%` }}
+                                    />
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {/* Right: CTA Button */}
                     <button
                         onClick={handleCheck}
-                        disabled={isChecking || limitReached}
-                        className="px-8 py-4.5 rounded-xl font-bold text-[15px] text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:brightness-110 shadow-[0_10px_30px_rgba(99,102,241,0.2)]"
+                        disabled={isChecking || (!user && limitReached)}
+                        className="px-8 py-4 rounded-xl font-bold text-[15px] text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:brightness-110 shadow-[0_10px_30px_rgba(99,102,241,0.2)]"
                         style={{ background: "#6366f1" }}
                     >
                         {isChecking ? (
@@ -302,8 +311,8 @@ export default function CheckerCard() {
                     POWERED BY REAL-TIME GOOGLE SEARCH VERIFICATION.
                 </p>
 
-                {/* Limit reached banner (Hidden for logged in users) */}
-                {!user && (
+                {/* Limit reached banner — only shown when guest hits daily limit */}
+                {!user && limitReached && (
                     <div className="bg-[#121421] border border-white/[0.04] rounded-xl p-6 flex items-center justify-between mt-6">
                         <div className="flex items-center gap-4">
                             <div className="w-[48px] h-[48px] rounded-xl bg-[#1A1E2E] flex items-center justify-center border border-white/[0.05]">
@@ -311,14 +320,17 @@ export default function CheckerCard() {
                             </div>
                             <div className="flex flex-col gap-0.5">
                                 <p className="text-[15px] font-bold text-white">
-                                    You've reached today's limit.
+                                    You&apos;ve reached today&apos;s limit.
                                 </p>
                                 <p className="text-[13px] text-[#475569] font-medium">
                                     Create Free Account – Unlimited Checks
                                 </p>
                             </div>
                         </div>
-                        <button className="bg-[#1e2336] hover:bg-[#282f4a] transition-colors text-[13px] font-bold text-white px-6 py-3 rounded-lg border border-white/[0.08] shadow-sm">
+                        <button
+                            onClick={() => window.dispatchEvent(new CustomEvent("indexy:open-auth", { detail: "signup" }))}
+                            className="bg-[#1e2336] hover:bg-[#282f4a] transition-colors text-[13px] font-bold text-white px-6 py-3 rounded-lg border border-white/[0.08] shadow-sm"
+                        >
                             Create Account
                         </button>
                     </div>
@@ -339,24 +351,7 @@ export default function CheckerCard() {
                     </span>
                 </div>
 
-                <style dangerouslySetInnerHTML={{
-                    __html: `
-                        .custom-scrollbar::-webkit-scrollbar {
-                            width: 6px;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar-track {
-                            background: transparent;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar-thumb {
-                            background: rgba(255, 255, 255, 0.1);
-                            border-radius: 10px;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                            background: rgba(255, 255, 255, 0.2);
-                        }
-                    `}} />
-
-                <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+<div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
                     {/* Mockup Rows for parity */}
                     {!isChecking && results.length === 0 && (
                         <>

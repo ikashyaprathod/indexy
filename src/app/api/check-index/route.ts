@@ -161,8 +161,8 @@ export async function POST(request: NextRequest) {
                     }
                 };
 
-                // Send a metadata event first so the frontend knows the total
-                send({ type: "meta", total });
+                // Send a metadata event first so the frontend knows the total and batch ID
+                send({ type: "meta", total, batchId: batch?.id ?? null });
 
                 const tasks = urlList.map((url: string) =>
                     limit(async () => {

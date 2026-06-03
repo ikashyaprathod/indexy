@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Zap, LayoutDashboard, LogOut, ShieldCheck } from "lucide-react";
+import { Zap, LayoutDashboard, LogOut } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import AuthModal from "./AuthModal";
 
 interface UserInfo {
@@ -15,7 +14,6 @@ interface UserInfo {
 }
 
 export default function Header() {
-    const router = useRouter();
     const [user, setUser] = useState<UserInfo | null>(null);
     const [authModal, setAuthModal] = useState<"login" | "signup" | null>(null);
     const [checked, setChecked] = useState(false);
@@ -26,16 +24,23 @@ export default function Header() {
             .then((d) => { setUser(d.user ?? null); setChecked(true); })
             .catch(() => setChecked(true));
 
-        // Open modal if redirected with ?auth=login
+        // Open modal if redirected with ?auth=login or ?auth=signup
         const params = new URLSearchParams(window.location.search);
-        if (params.get("auth") === "login") setAuthModal("login");
+        const authParam = params.get("auth");
+        if (authParam === "login" || authParam === "signup") setAuthModal(authParam);
+
+        // Listen for custom event from CheckerCard / other components
+        const handleOpenAuth = (e: Event) => {
+            const tab = (e as CustomEvent<"login" | "signup">).detail;
+            setAuthModal(tab);
+        };
+        window.addEventListener("indexy:open-auth", handleOpenAuth);
+        return () => window.removeEventListener("indexy:open-auth", handleOpenAuth);
     }, []);
 
     async function handleLogout() {
         await fetch("/api/auth/logout", { method: "POST" });
-        setUser(null);
-        router.push("/");
-        router.refresh();
+        window.location.href = "/";
     }
 
     return (

@@ -4,7 +4,7 @@ import { getSessionFromCookieString } from "@/lib/auth";
 // Routes that require authentication
 const PROTECTED = ["/dashboard", "/admin"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     const isProtected = PROTECTED.some((p) => pathname.startsWith(p));
