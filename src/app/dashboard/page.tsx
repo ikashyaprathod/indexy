@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
     Zap, Link2, Clock, CheckCircle2, X,
     AlertCircle, ExternalLink, RefreshCw,
     LogOut, Loader2,
     Filter, Download, Database, Activity,
-    Calendar
+    Calendar, Copy, Check, Clipboard
 } from "lucide-react";
 import Link from "next/link";
 import Footer from "@/components/Footer";
@@ -62,6 +62,10 @@ export default function DashboardPage() {
     const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
     const [checkError, setCheckError] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<"ALL" | "INDEXED" | "NOT_INDEXED" | "ERROR">("ALL");
+    const [liveUpdate, setLiveUpdate] = useState(true);
+    const [copied, setCopied] = useState(false);
+    const liveUpdateRef = useRef(true);
+    const pendingResultsRef = useRef<ScanResult[]>([]);
 
     // Initial persistence load
     useEffect(() => {
@@ -170,11 +174,19 @@ export default function DashboardPage() {
                                 next.splice(idx, 1);
                                 return next;
                             });
-                            setResults(prev => [event, ...prev]);
+                            if (liveUpdateRef.current) {
+                                setResults(prev => [event, ...prev]);
+                            } else {
+                                pendingResultsRef.current = [event, ...pendingResultsRef.current];
+                            }
                             setProgress({ done: event.completed, total: event.total });
                         } else if (event.type === "done") {
                             setProgress(null);
                             setQueue([]);
+                            if (pendingResultsRef.current.length > 0) {
+                                setResults(prev => [...pendingResultsRef.current, ...prev]);
+                                pendingResultsRef.current = [];
+                            }
                         }
                     } catch { /* skip malformed */ }
                 }
@@ -189,6 +201,24 @@ export default function DashboardPage() {
             refreshStats();
             refreshBatches();
         }
+    }
+
+    function toggleLiveUpdate() {
+        const next = !liveUpdate;
+        setLiveUpdate(next);
+        liveUpdateRef.current = next;
+        if (next && pendingResultsRef.current.length > 0) {
+            setResults(prev => [...pendingResultsRef.current, ...prev]);
+            pendingResultsRef.current = [];
+        }
+    }
+
+    function copyFilteredUrls(filtered: ScanResult[]) {
+        const text = filtered.map(r => r.url).join("\n");
+        navigator.clipboard.writeText(text).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1800);
+        });
     }
 
     const indexedCount = results.filter(r => r.status === "INDEXED").length;
@@ -444,15 +474,40 @@ export default function DashboardPage() {
 
                             {/* Live Results */}
                             <div className="rounded-[24px] p-8" style={{ background: "linear-gradient(165deg, #0e1120, #060812)", border: "1px solid rgba(255,255,255,0.04)" }}>
+                                {/* Row 1: title + Live Update toggle */}
                                 <div className="flex items-center justify-between mb-2">
                                     <h3 className="text-base font-black text-white uppercase tracking-[0.05em]">Live Results</h3>
                                     <div className="flex items-center gap-3">
-                                        <span className="text-[11px] font-black text-[#4b5563] uppercase tracking-[0.15em]">Live Update</span>
-                                        <div className="w-10 h-5 rounded-full bg-[#10b981]/10 border border-[#10b981]/20 flex items-center px-1 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-                                            <div className="w-3 h-3 rounded-full bg-[#10b981] ml-auto shadow-[0_0_8px_#10b981]" />
-                                        </div>
+                                        <span className="text-[11px] font-black uppercase tracking-[0.15em]"
+                                            style={{ color: liveUpdate ? "#4b5563" : "#ef4444" }}>
+                                            {liveUpdate ? "Live Update" : "Paused"}
+                                        </span>
+                                        <button
+                                            onClick={toggleLiveUpdate}
+                                            className="relative w-10 h-5 rounded-full flex items-center px-1 transition-all"
+                                            style={{
+                                                background: liveUpdate ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
+                                                border: liveUpdate ? "1px solid rgba(16,185,129,0.2)" : "1px solid rgba(239,68,68,0.2)",
+                                                boxShadow: liveUpdate ? "0 0 10px rgba(16,185,129,0.1)" : "none",
+                                            }}
+                                            title={liveUpdate ? "Pause live updates" : "Resume live updates"}
+                                        >
+                                            <div className="w-3 h-3 rounded-full transition-all duration-300"
+                                                style={{
+                                                    background: liveUpdate ? "#10b981" : "#ef4444",
+                                                    boxShadow: liveUpdate ? "0 0 8px #10b981" : "0 0 8px #ef4444",
+                                                    marginLeft: liveUpdate ? "auto" : "0",
+                                                }} />
+                                        </button>
+                                        {!liveUpdate && pendingResultsRef.current.length > 0 && (
+                                            <span className="text-[10px] font-black text-[#ef4444] uppercase tracking-widest animate-pulse">
+                                                +{pendingResultsRef.current.length} pending
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
+
+                                {/* Row 2: batch info + filter pills + copy button */}
                                 <div className="flex items-center justify-between mb-6">
                                     <div className="text-[11px] font-black uppercase tracking-[0.2em]">
                                         <span className="text-[#4b5563]">Batch</span> <span className="text-[#5b7aff]">{currentBatchId ? `#${currentBatchId}` : "#—"}</span> <span className="mx-2 text-white/5">—</span> <span className="text-[#10b981]">{indexRate}% Indexed</span>
@@ -485,11 +540,36 @@ export default function DashboardPage() {
                                                 </span>
                                             </button>
                                         ))}
+                                        <div className="w-px h-4 mx-1" style={{ background: "rgba(255,255,255,0.06)" }} />
+                                        {/* Copy filtered URLs */}
+                                        {(() => {
+                                            const filtered = statusFilter === "ALL" ? results : results.filter(r => r.status === statusFilter);
+                                            return (
+                                                <button
+                                                    onClick={() => copyFilteredUrls(filtered)}
+                                                    disabled={filtered.length === 0}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-30"
+                                                    style={copied ? {
+                                                        background: "rgba(16,185,129,0.12)",
+                                                        border: "1px solid rgba(16,185,129,0.3)",
+                                                        color: "#10b981",
+                                                    } : {
+                                                        background: "rgba(255,255,255,0.02)",
+                                                        border: "1px solid rgba(255,255,255,0.05)",
+                                                        color: "#4b5563",
+                                                    }}
+                                                    title={`Copy ${filtered.length} URL${filtered.length !== 1 ? "s" : ""}`}
+                                                >
+                                                    {copied ? <Check size={11} /> : <Clipboard size={11} />}
+                                                    {copied ? "Copied!" : "Copy URLs"}
+                                                </button>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
 
                                 <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                                    <div className="grid grid-cols-[1fr_150px_200px] gap-6 px-4 pb-4 border-b border-white/[0.04] text-[10px] uppercase tracking-[0.3em] font-black text-[#4b5563]">
+                                    <div className="grid grid-cols-[1fr_150px_160px] gap-6 px-4 pb-4 border-b border-white/[0.04] text-[10px] uppercase tracking-[0.3em] font-black text-[#4b5563]">
                                         <span>URL</span>
                                         <span className="text-center">Status</span>
                                         <span className="text-right">Details</span>
@@ -505,7 +585,7 @@ export default function DashboardPage() {
                                                 No {statusFilter.toLowerCase().replace("_", " ")} results
                                             </div>
                                         ) : filtered.map((r, i) => (
-                                            <div key={i} className="grid grid-cols-[1fr_150px_200px] gap-6 items-center px-4 py-6 border-b border-white/[0.02] last:border-0 hover:bg-white/[0.01] transition-all group">
+                                            <div key={i} className="grid grid-cols-[1fr_150px_160px] gap-6 items-center px-4 py-6 border-b border-white/[0.02] last:border-0 hover:bg-white/[0.01] transition-all group">
                                                 <span className="text-sm font-black font-mono text-white/90 truncate tracking-tight" title={r.url}>{r.url}</span>
                                                 <div className="flex justify-center">
                                                     {r.status === "INDEXED" ? (
@@ -528,10 +608,17 @@ export default function DashboardPage() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div className="text-right">
+                                                <div className="flex items-center justify-end gap-2">
                                                     <span className="text-[11px] font-black text-[#4b5563] uppercase tracking-tight group-hover:text-white/60 transition-colors">
                                                         {r.checked_at ? new Date(r.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
                                                     </span>
+                                                    <button
+                                                        onClick={() => navigator.clipboard.writeText(r.url)}
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md text-[#4b5563] hover:text-white hover:bg-white/10"
+                                                        title="Copy URL"
+                                                    >
+                                                        <Copy size={11} />
+                                                    </button>
                                                 </div>
                                             </div>
                                         ));
