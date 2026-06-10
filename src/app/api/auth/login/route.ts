@@ -12,7 +12,7 @@ export async function POST(request: Request) {
         }
 
         email = email.trim().toLowerCase();
-        const user = getUserByEmail(email);
+        const user = await getUserByEmail(email);
         if (!user) {
             return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
         }

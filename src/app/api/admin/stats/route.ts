@@ -8,8 +8,7 @@ export async function GET() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const stats = getGlobalStats();
-    const recentChecks = getAdminRecentChecks(10);
+    const [stats, recentChecks] = await Promise.all([getGlobalStats(), getAdminRecentChecks(10)]);
 
     return NextResponse.json({ stats, recentChecks });
 }

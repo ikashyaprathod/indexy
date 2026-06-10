@@ -8,9 +8,13 @@ export async function GET() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    const [guest_mode_val, public_signup_val] = await Promise.all([
+        getSetting("guest_mode", "true"),
+        getSetting("public_signup", "true"),
+    ]);
     return NextResponse.json({
-        guest_mode: getSetting("guest_mode", "true") === "true",
-        public_signup: getSetting("public_signup", "true") === "true",
+        guest_mode: guest_mode_val === "true",
+        public_signup: public_signup_val === "true",
     });
 }
 
@@ -24,10 +28,10 @@ export async function POST(request: Request) {
         const { guest_mode, public_signup } = await request.json();
 
         if (typeof guest_mode === "boolean") {
-            updateSetting("guest_mode", String(guest_mode));
+            await updateSetting("guest_mode", String(guest_mode));
         }
         if (typeof public_signup === "boolean") {
-            updateSetting("public_signup", String(public_signup));
+            await updateSetting("public_signup", String(public_signup));
         }
 
         return NextResponse.json({ success: true });

@@ -8,7 +8,7 @@ export async function GET() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const users = getAllUsers();
+    const users = await getAllUsers();
     return NextResponse.json({ users });
 }
 
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     try {
         const { email, plan } = await request.json();
         if (email && plan) {
-            updatePremiumStatus(email, plan === "premium");
+            await updatePremiumStatus(email, plan === "premium");
             return NextResponse.json({ success: true });
         }
         return NextResponse.json({ error: "Email and plan are required" }, { status: 400 });

@@ -15,8 +15,8 @@ export async function validateRequest(req: NextRequest) {
     // 1. Basic Origin/Referer check (prevents some CSRF and direct API hits)
     // On localhost, we might allow any, but in production we'd be stricter
     if (process.env.NODE_ENV === "production") {
-        const allowedOrigin = process.env.ALLOWED_ORIGIN || "https://indexy.app";
-        if (origin && !origin.startsWith(allowedOrigin)) {
+        const allowedOrigin = process.env.ALLOWED_ORIGIN;
+        if (allowedOrigin && origin && !origin.startsWith(allowedOrigin)) {
             return { valid: false, error: "Unauthorized Origin" };
         }
     }

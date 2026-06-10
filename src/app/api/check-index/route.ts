@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
 
         // ─── 1. IP Rate Limiting (Server-Side) ───────────────────────────────
         if (!session) {
-            const usage = getIpUsage(clientIp);
+            const usage = await getIpUsage(clientIp);
             if (usage.count >= 30) {
                 return new Response(
                     JSON.stringify({ error: "Daily limit reached (30 URLs/day for guests). Create account for unlimited access." }),
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
         );
 
         // Create a batch record for logged-in users
-        const batch = session ? createBatch(session.userId, urlList.length) : null;
+        const batch = session ? await createBatch(session.userId, urlList.length) : null;
 
         const encoder = new TextEncoder();
 
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
                         // If we've checked this URL in the last 168h, serve the
                         // cached result instantly — zero API calls consumed.
                         try {
-                            const cached = getCachedScan(url, 168);
+                            const cached = await getCachedScan(url, 168);
                             if (cached) {
                                 status = cached.status;
                                 fromCache = true;
@@ -233,7 +233,7 @@ export async function POST(request: NextRequest) {
                             // Persist fresh result to cache (skip ERROR results)
                             try {
                                 if (status !== "ERROR") {
-                                    saveScan(url, status);
+                                    await saveScan(url, status);
                                 }
                             } catch {
                                 // DB write failure — non-fatal
@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
                         // ALWAYS save to the user's batch if logged in and not an error
                         try {
                             if (batch && status !== "ERROR") {
-                                saveBatchResult(batch.id, url, status);
+                                await saveBatchResult(batch.id, url, status);
                             }
                         } catch (err) {
                             console.error("[Batch Save Error]", err);
@@ -270,7 +270,7 @@ export async function POST(request: NextRequest) {
 
                 // ─── 2. Update Usage Stats ───────────────────────────────────
                 if (!session) {
-                    incrementIpUsage(clientIp, urlList.length);
+                    await incrementIpUsage(clientIp, urlList.length);
                 }
 
                 // Signal the client the stream is fully done

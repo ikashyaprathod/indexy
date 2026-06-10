@@ -17,6 +17,6 @@ export async function GET(
         return NextResponse.json({ error: "Invalid Batch ID" }, { status: 400 });
     }
 
-    const results = getBatchResults(batchId);
+    const results = await getBatchResults(batchId);
     return NextResponse.json({ results });
 }

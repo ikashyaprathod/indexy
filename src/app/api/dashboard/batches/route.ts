@@ -8,6 +8,6 @@ export async function GET() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const batches = getUserBatches(session.userId, 20);
+    const batches = await getUserBatches(session.userId, 20);
     return NextResponse.json({ batches });
 }

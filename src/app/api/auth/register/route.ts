@@ -18,13 +18,13 @@ export async function POST(request: Request) {
         }
 
         try {
-            const existing = getUserByEmail(email);
+            const existing = await getUserByEmail(email);
             if (existing) {
                 return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
             }
 
             const passwordHash = await bcrypt.hash(password, 12);
-            const user = createUser(email, passwordHash, name.trim());
+            const user = await createUser(email, passwordHash, name.trim());
 
             await setSessionCookie({ userId: user.id, email: user.email, name: user.name, role: user.role });
 
@@ -33,13 +33,8 @@ export async function POST(request: Request) {
             });
         } catch (dbErr: any) {
             console.error("[Register DB Error]", dbErr);
-            if (dbErr.message?.includes("UNIQUE constraint failed")) {
+            if (dbErr.message?.includes("unique") || dbErr.message?.includes("UNIQUE") || dbErr.code === "23505") {
                 return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
-            }
-            if (dbErr.code === "SQLITE_READONLY" || dbErr.message?.includes("readonly")) {
-                return NextResponse.json({
-                    error: "Database is read-only. This is likely because you are on Netlify or an environment without persistent storage."
-                }, { status: 500 });
             }
             throw dbErr; // Re-throw to be caught by the outer catch
         }
